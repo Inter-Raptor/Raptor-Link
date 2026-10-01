@@ -14,7 +14,7 @@
 
 <br>
 
-<img src="media/demo-secondary.gif" alt="Raptor Link demonstration" width="900">
+<img src="assets/screenshots/screenshot-01.png" alt="Raptor Link application overview" width="900">
 
 </div>
 
@@ -53,7 +53,7 @@ Instead of treating every LED controller as a separate web page, Raptor Link giv
 
 <div align="center">
 
-<img src="media/demo-main.gif" alt="Raptor Link live demo" width="900">
+<img src="assets/demos/screen-sync-demo.gif" alt="Raptor Link live demo" width="900">
 
 </div>
 
@@ -67,12 +67,12 @@ Raptor Link is designed around **real-time interaction**: change a source, prese
 
 <table>
 <tr>
-<td width="50%"><img src="media/screenshot-01.png" alt="Raptor Link screenshot 1"></td>
-<td width="50%"><img src="media/screenshot-02.png" alt="Raptor Link screenshot 2"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-01.png" alt="Raptor Link screenshot 1"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-02.png" alt="Raptor Link screenshot 2"></td>
 </tr>
 <tr>
-<td width="50%"><img src="media/screenshot-03.png" alt="Raptor Link screenshot 3"></td>
-<td width="50%"><img src="media/screenshot-04.png" alt="Raptor Link screenshot 4"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-03.png" alt="Raptor Link screenshot 3"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-04.png" alt="Raptor Link screenshot 4"></td>
 </tr>
 </table>
 
@@ -92,14 +92,22 @@ A desk can contain several LED sections. A monitor can have LEDs only on some ed
 
 <table>
 <tr>
-<td width="50%"><img src="media/screenshot-05.png" alt="Screen mapping"></td>
-<td width="50%"><img src="media/screenshot-06.png" alt="LED mapping configuration"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-05.png" alt="Screen mapping"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-06.png" alt="LED mapping configuration"></td>
 </tr>
 </table>
 
 </div>
 
 This makes it possible to build Ambilight-style effects while keeping the mapping adapted to the real installation.
+
+### Keyboard / LED addressing in action
+
+<div align="center">
+
+<img src="assets/demos/keyboard-addressing.gif" alt="Raptor Link keyboard and LED addressing demonstration" width="900">
+
+</div>
 
 ---
 
@@ -127,8 +135,8 @@ That means you can keep using the WLED features you already know while adding PC
 
 <table>
 <tr>
-<td width="50%"><img src="media/screenshot-07.png" alt="WLED integration"></td>
-<td width="50%"><img src="media/screenshot-08.png" alt="WLED presets"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-07.png" alt="WLED integration"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-08.png" alt="WLED presets"></td>
 </tr>
 </table>
 
@@ -201,7 +209,7 @@ Raptor Link can remain accessible from the Windows system tray, so the applicati
 
 <div align="center">
 
-<img src="media/tray-icon.png" alt="Raptor Link system tray" width="650">
+<img src="assets/icons/system-tray.png" alt="Raptor Link system tray" width="650">
 
 </div>
 
@@ -216,11 +224,11 @@ Raptor Link can remain accessible from the Windows system tray, so the applicati
 
 <div align="center">
 
-<img src="media/screenshot-09.png" alt="Raptor Link screenshot 9" width="850">
+<img src="assets/screenshots/screenshot-09.png" alt="Raptor Link screenshot 9" width="850">
 
 <br><br>
 
-<img src="media/screenshot-10.png" alt="Raptor Link screenshot 10" width="850">
+<img src="assets/screenshots/screenshot-10.png" alt="Raptor Link screenshot 10" width="850">
 
 </div>
 
