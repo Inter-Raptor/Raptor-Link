@@ -21,7 +21,7 @@ import urllib.request
 from cue_base import Cue, Device, Filter, Position, Color, check, Idle, sources
 
 HTTP=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr'},'targets':[]}
+DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True},'targets':[]}
 
 def address(value):
     ip=ipaddress.ip_address(value)
@@ -43,7 +43,7 @@ def validate(raw):
     for key,lo,hi in [('fps',1,40),('idle_seconds',0,86400)]:
         s[key]=int(s[key])
         if not lo<=s[key]<=hi: raise ValueError('Réglage hors limites : '+key)
-    for k in ['lock_off','auto_sync','startup']: s[k]=bool(s[k])
+    for k in ['lock_off','auto_sync','startup','check_updates']: s[k]=bool(s.get(k,True if k=='check_updates' else False))
     if s['language'] not in ['fr','en']: s['language']='fr'
     targets=raw.get('targets',[])
     if not isinstance(targets,list) or len(targets)>32: raise ValueError('32 éclairages maximum')
