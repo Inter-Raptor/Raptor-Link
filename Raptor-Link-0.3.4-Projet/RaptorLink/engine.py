@@ -23,7 +23,7 @@ from openrgb_source import OpenRGBWorker
 from msi_source import MsiWorker, install_official_sdk, sdk_status
 
 HTTP=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True},'targets':[]}
+DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True,'experimental_rgb':False},'targets':[]}
 
 def address(value):
     ip=ipaddress.ip_address(value)
@@ -45,7 +45,7 @@ def validate(raw):
     for key,lo,hi in [('fps',1,40),('idle_seconds',0,86400)]:
         s[key]=int(s[key])
         if not lo<=s[key]<=hi: raise ValueError('Réglage hors limites : '+key)
-    for k in ['lock_off','auto_sync','startup','check_updates']: s[k]=bool(s.get(k,True if k=='check_updates' else False))
+    for k in ['lock_off','auto_sync','startup','check_updates','experimental_rgb']: s[k]=bool(s.get(k,True if k=='check_updates' else False))
     if s['language'] not in ['fr','en']: s['language']='fr'
     targets=raw.get('targets',[])
     if not isinstance(targets,list) or len(targets)>32: raise ValueError('32 éclairages maximum')
@@ -312,7 +312,7 @@ class Engine:
         try:
             path=install_official_sdk(self.path.parent)
         finally:
-            if not self.demo and self.msi is None:self.msi=MsiWorker(self.log,self.path.parent)
+            if not self.demo and self.config['settings'].get('experimental_rgb') and self.msi is None:self.msi=MsiWorker(self.log,self.path.parent)
         self.scan_requested=True
         self.log('SDK MSI Mystic Light officiel installé pour Raptor Link : '+str(path))
         return self.msi_status()
@@ -386,8 +386,9 @@ class Engine:
         self.capture=Capture();last_frame=time.monotonic();last_error=''
         if not self.demo:
             self.icue=IcueWorker(self.log)
-            self.msi=MsiWorker(self.log,self.path.parent)
-            self.openrgb=OpenRGBWorker(self.log)
+            if self.config['settings'].get('experimental_rgb'):
+                self.msi=MsiWorker(self.log,self.path.parent)
+                self.openrgb=OpenRGBWorker(self.log)
         idle=None
         try:
             if not self.demo:idle=WinIdle()
@@ -395,6 +396,14 @@ class Engine:
             while not self.done.is_set():
                 start=time.monotonic();self.loop_heartbeat=start;dt=min(.2,start-last_frame);last_frame=start;now=datetime.datetime.now()
                 try:
+                    experimental=bool(self.config['settings'].get('experimental_rgb',False))
+                    if not self.demo:
+                        if experimental and self.msi is None:self.msi=MsiWorker(self.log,self.path.parent)
+                        if experimental and self.openrgb is None:self.openrgb=OpenRGBWorker(self.log)
+                        if not experimental and self.msi is not None:
+                            self.msi.close();self.msi=None;self.msi_notice=False
+                        if not experimental and self.openrgb is not None:
+                            self.openrgb.close();self.openrgb=None;self.openrgb_notice=False
                     if self.running and (not self.want_run or self.run_revision!=self.revision):
                         for f in pending.values():f.cancel()
                         pending={};self.restore();health={};next_probe={}
@@ -420,7 +429,7 @@ class Engine:
                                 candidates=[d for d in self.devices if d.get('provider','icue')==expected_provider]
                                 matches=[d for d in candidates if (r.get('device_serial') and d.get('serial')==r['device_serial']) or (not r.get('device_serial') and r.get('device_model')==d['model'])]
                                 if len(matches)==1 and set(r['ids'])<={p['id'] for p in matches[0]['positions']}:r['device']=matches[0]['id']
-                    required={self.preview_device}|{r['device'] for t in self.config['targets']+self.active for r in t['routes'] if r.get('source') in ('icue','msi','openrgb')}
+                    required={self.preview_device}|{r['device'] for t in self.config['targets']+self.active for r in t['routes'] if r.get('source')=='icue' or (experimental and r.get('source') in ('msi','openrgb'))}
                     if self.demo:
                         colors={}
                         for d in self.devices:
@@ -450,7 +459,7 @@ class Engine:
                         elif not cue_state.get('stalled') and self.icue_notice:
                             self.log('iCUE : communication rétablie.')
                             self.icue_notice=False
-                        uses_msi=any(r.get('source')=='msi' for t in self.config['targets']+self.active for r in t.get('routes',[]))
+                        uses_msi=experimental and any(r.get('source')=='msi' for t in self.config['targets']+self.active for r in t.get('routes',[]))
                         if uses_msi and (not msi_state.get('available') or msi_state.get('error')) and not self.msi_notice:
                             detail=msi_state.get('error') or 'SDK MSI non installé'
                             self.log('MSI Mystic Light natif (Bêta) : '+str(detail))
@@ -458,7 +467,7 @@ class Engine:
                         elif uses_msi and msi_state.get('available') and not msi_state.get('error') and self.msi_notice:
                             self.log('MSI Mystic Light natif (Bêta) : communication rétablie.')
                             self.msi_notice=False
-                        uses_openrgb=any(r.get('source')=='openrgb' for t in self.config['targets']+self.active for r in t.get('routes',[]))
+                        uses_openrgb=experimental and any(r.get('source')=='openrgb' for t in self.config['targets']+self.active for r in t.get('routes',[]))
                         if uses_openrgb and not openrgb_state.get('connected') and not self.openrgb_notice:
                             detail=openrgb_state.get('error') or 'serveur SDK indisponible'
                             self.log('OpenRGB (Bêta) : '+str(detail)+' — démarrez le serveur SDK local sur le port 6742.')
@@ -495,7 +504,9 @@ class Engine:
                                 states[ip]='Reconnexion…' if ip not in health else health[ip];continue
                             errors=[]
                             for i,r in enumerate(t['routes']):
-                                if r['source'] in ('icue','msi','openrgb') and (not r['ids'] or any(x not in colors.get(r['device'],{}) for x in r['ids'])):
+                                if r['source'] in ('msi','openrgb') and not experimental:
+                                    errors.append('Association '+str(i+1)+' : source RGB expérimentale désactivée')
+                                elif r['source'] in ('icue','msi','openrgb') and (not r['ids'] or any(x not in colors.get(r['device'],{}) for x in r['ids'])):
                                     errors.append('Association '+str(i+1)+' : appareil ou LED indisponibles')
                             if not self.demo and on_screen_missing(t,self.capture):errors.append('Écran indisponible : vérifiez la sélection dans la zone')
                             if not t['routes']:errors.append('Ajoutez une association')
@@ -530,8 +541,8 @@ class Engine:
                     self.target_status=states;self.previews=frames
                     base_status=('Synchronisation active' if self.active else 'Activez au moins un éclairage') if self.running else 'Prêt · choisissez vos associations'
                     uses_icue=any(r.get('source')=='icue' for t in self.active for r in t.get('routes',[]))
-                    uses_msi=any(r.get('source')=='msi' for t in self.active for r in t.get('routes',[]))
-                    uses_openrgb=any(r.get('source')=='openrgb' for t in self.active for r in t.get('routes',[]))
+                    uses_msi=experimental and any(r.get('source')=='msi' for t in self.active for r in t.get('routes',[]))
+                    uses_openrgb=experimental and any(r.get('source')=='openrgb' for t in self.active for r in t.get('routes',[]))
                     if uses_icue and cue_state.get('stalled'):self.status=base_status+' · iCUE ne répond plus'
                     elif uses_msi and not msi_state.get('available'):self.status=base_status+' · SDK MSI à installer'
                     elif uses_msi and (msi_state.get('stalled') or msi_state.get('error')):self.status=base_status+' · MSI Mystic Light Bêta indisponible'
