@@ -182,3 +182,12 @@ VERSION 0.3.13 — Retour à l'expérience Raptor Link classique
 - Le centre Aide & retours est conservé : questions, commentaires, bugs et suggestions.
 - La demande facultative de note après environ une heure reste présente et n'est demandée qu'une fois après validation.
 - La vérification des nouvelles versions au démarrage reste disponible.
+
+
+VERSION 0.3.14 — Démarrage Windows et stabilité WLED
+- Les vérifications HTTP WLED ne coupent plus jamais l'éclairage.
+- L'envoi UDP temps réel n'attend plus que l'API HTTP WLED réponde.
+- Au démarrage de Windows, les contrôleurs WLED sont retentés rapidement en arrière-plan.
+- Raptor Link ne remplace plus l'effet WLED en cours par du noir pendant qu'iCUE ou la capture écran démarrent.
+- Une courte perte de source conserve la dernière trame valide pour éviter les extinctions/rallumages.
+- Le délai de maintien temps réel WLED passe de 2 à 5 secondes afin de mieux absorber les petits blocages réseau ou système.
