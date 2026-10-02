@@ -4,6 +4,13 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.3.9 Diagnostic Beta
+
+- Added low-level MSI Mystic Light diagnostics in the Sources RGB page.
+- Shows DLL presence/path, MLAPI_Initialize result, MLAPI_GetDeviceInfo result, raw device types, raw LED counts, bridge restart count and last error.
+- Fixed the stale “Choose an iCUE device” message while the MSI native source is selected.
+- Intended to diagnose MSI motherboards that appear in MSI Center but are not returned to Raptor Link through the public SDK.
+
 ## 0.3.8 Beta
 
 - Added a native MSI Mystic Light connector using MSI's official public SDK; OpenRGB is no longer required for MSI.
