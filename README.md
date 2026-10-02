@@ -252,11 +252,23 @@ Areas of interest include:
 
 ---
 
+### MSI Mystic Light — native Beta
+
+MSI hardware can now be used **without OpenRGB**. Raptor Link talks to MSI's official Mystic Light SDK in an isolated worker process. Because MSI's proprietary SDK DLL is not redistributed with this project, the app offers a button that downloads the official SDK kit directly from MSI and extracts the x64 DLL into Raptor Link's local data folder.
+
+Requirements for the native MSI connector:
+- Windows x64.
+- MSI Center installed with the Mystic Light module enabled.
+- The official MSI SDK installed through Raptor Link or otherwise discoverable on the PC.
+- Some systems may require launching Raptor Link as administrator for the MSI SDK.
+
+The native MSI connector is still marked **Beta**. The public SDK exposes device/LED state, but some vendor-side animated effects may not provide a true instantaneous RGB frame through the read API. Static colors and devices that expose current colors are the primary validation target for this release.
+
 ## 💬 Built-in feedback & hardware testing
 
 Raptor Link 0.3.7 includes the in-app feedback center introduced in 0.3.6. Users can prepare questions, bug reports, suggestions, ratings and hardware compatibility reports without exposing a GitHub token inside the application. The final report opens on GitHub pre-filled so the user can review it before submitting.
 
-Raptor Link 0.3.7 also adds a real **OpenRGB SDK source**. This makes compatible hardware from MSI, Gigabyte, ASUS, Razer, Logitech, SteelSeries and other OpenRGB-supported vendors usable as a color source for WLED.
+Raptor Link 0.3.8 adds a **native MSI Mystic Light connector** in addition to the OpenRGB source. This makes compatible hardware from MSI, Gigabyte, ASUS, Razer, Logitech, SteelSeries and other OpenRGB-supported vendors usable as a color source for WLED.
 
 **Corsair iCUE is the tested and validated integration.** The other ecosystems are clearly marked **Beta / In development** because they have not yet been validated across enough real-world hardware.
 
