@@ -1,143 +1,327 @@
+<div align="center">
+
 # 🦖 Raptor Link
 
-**Raptor Link** is a Windows application designed to connect **WLED** lighting to your PC and integrate it with the **Corsair iCUE** ecosystem.
+### Bring WLED into your PC RGB ecosystem.
 
-It can also be used with WLED devices without Corsair hardware.
+**WLED + Corsair iCUE + screen ambience + presets + automation — from one Windows app.**
 
-> Community project. Raptor Link is not affiliated with, endorsed by, or sponsored by Corsair or the WLED project. Corsair and iCUE are trademarks of their respective owners.
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://github.com/Inter-Raptor/Raptor-Link)
+[![WLED](https://img.shields.io/badge/WLED-compatible-ffb000)](https://kno.wled.ge/)
+[![Corsair iCUE](https://img.shields.io/badge/Corsair-iCUE-ffd000)](https://www.corsair.com/icue)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![GitHub issues](https://img.shields.io/github/issues/Inter-Raptor/Raptor-Link)](https://github.com/Inter-Raptor/Raptor-Link/issues)
 
-## ✨ Main features
+<br>
 
-- 🔗 Connect and manage multiple WLED controllers
-- 🎮 Integration with Corsair iCUE
-- 🖥️ Screen-to-LED mapping for ambient lighting
-- 🖥️ Multi-monitor support
-- 🎨 Use WLED presets as lighting sources
-- ⚡ Trigger presets depending on PC activity/state
-- 🌐 Open the web interface of each configured WLED device directly from Raptor Link
-- 💡 Use Raptor Link with WLED even without Corsair hardware
-- 🧩 Segment-based LED configuration
+<img src="assets/screenshots/screenshot-01.png" alt="Raptor Link application overview" width="900">
 
-## 🧭 Screen mapping
-
-Raptor Link is designed to make screen mapping visual and easy to understand.
-
-You can position your monitors and define which WLED LED segments correspond to areas of the screen. This makes it possible to create Ambilight-style lighting even with complex LED installations.
-
-Example:
-
-```text
-Monitor 1
-┌──────────────────────────────┐
-│  Segment A        Segment B  │
-│                              │
-│                              │
-│  Segment D        Segment C  │
-└──────────────────────────────┘
-
-WLED:
-Segment A → LEDs 0-24
-Segment B → LEDs 25-74
-Segment C → LEDs 75-124
-Segment D → LEDs 125-149
-```
-
-## 📥 Download
-
-The Windows installer will be available in the **Releases** section of this repository.
-
-➡️ Go to: **Releases → Latest release → Assets**
-
-The installer is added manually by the project owner.
-
-## 🚀 Getting started
-
-1. Install and configure WLED on your LED controller.
-2. Make sure the PC and WLED devices are on the same local network.
-3. Install Raptor Link.
-4. Add your WLED device using its IP address.
-5. Configure LED segments and screen mapping.
-6. If desired, enable Corsair iCUE integration.
-7. Select your lighting source, WLED preset, or screen capture mode.
-
-## 🌈 WLED presets
-
-Raptor Link can use presets already created inside WLED.
-
-This allows you to keep your effects and colors configured in WLED while letting Raptor Link decide when they should be activated.
-
-Typical uses include:
-
-- preset when the PC is active
-- preset when the screen capture mode is disabled
-- decorative lighting
-- fallback lighting
-- gaming profiles
-
-## 🎮 Corsair iCUE
-
-The primary goal of Raptor Link is to bridge WLED installations with a Corsair iCUE-based PC setup.
-
-The project aims to let DIY WLED lighting become part of a larger PC RGB environment instead of remaining isolated from commercial RGB hardware.
-
-## 🛠️ Requirements
-
-- Windows PC
-- One or more WLED-compatible devices
-- Local network access to the WLED devices
-- Corsair iCUE only if you want to use the iCUE integration
-
-## 🐛 Report a bug
-
-If something does not work, open an issue using the **Bug report** template.
-
-Please include:
-
-- Raptor Link version
-- Windows version
-- WLED version
-- number of WLED devices
-- a description of the problem
-- steps to reproduce it
-- screenshots if useful
-
-## 💡 Suggest a feature
-
-Ideas are welcome.
-
-Open an issue using the **Feature request** template and describe what you would like Raptor Link to do.
-
-## 🗺️ Project roadmap
-
-Raptor Link is actively evolving. Areas of development include:
-
-- improved multi-monitor mapping
-- easier visual segment placement
-- additional WLED preset automation
-- better iCUE synchronization
-- device discovery and configuration improvements
-- easier diagnostics and troubleshooting
-- improved user interface
-
-## 🤝 Contributing
-
-Feedback, bug reports, testing and ideas are welcome.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## 🔐 Security
-
-Please do not publish sensitive network information such as private credentials or access tokens in issues.
-
-See [SECURITY.md](SECURITY.md).
-
-## 📜 License
-
-No open-source license has been selected yet. Unless a license is added later, the project remains protected by standard copyright rules.
+</div>
 
 ---
 
-### Links
+## What is Raptor Link?
 
-- [WLED project](https://github.com/Aircoookie/WLED)
-- [Corsair iCUE](https://www.corsair.com/icue)
+**Raptor Link** is a Windows application built to make DIY **WLED** lighting feel like a native part of a PC setup.
+
+Its original purpose is to bridge **WLED** devices with **Corsair iCUE**, but it is not limited to Corsair hardware. Raptor Link can also be used as a standalone WLED control and synchronization tool.
+
+Instead of treating every LED controller as a separate web page, Raptor Link gives you one place to organize devices, link lighting to your screen, trigger WLED presets and build a more coherent RGB installation.
+
+> **One PC. Multiple WLED controllers. One lighting ecosystem.**
+
+---
+
+## ⚡ Highlights
+
+| | Feature | What it does |
+|---|---|---|
+| 🎮 | **Corsair iCUE integration** | Bring WLED lighting into an iCUE-centered setup |
+| 🌈 | **WLED control** | Manage WLED devices directly from the application |
+| 🖥️ | **Screen ambience** | Sample screen colors and send them to your LEDs |
+| 🧭 | **Visual LED mapping** | Associate physical LED sections with areas of the display |
+| 💡 | **Multiple WLED devices** | Control more than one WLED controller from the same app |
+| 🎨 | **WLED presets** | Reuse effects and presets already created in WLED |
+| ⚙️ | **Automations** | Trigger lighting behavior according to your PC setup |
+| 🌐 | **Direct WLED access** | Open the native WLED web UI from Raptor Link |
+| 🖱️ | **System tray support** | Keep Raptor Link available without leaving a large window open |
+| 🔌 | **Works without Corsair** | iCUE is optional for users who only want WLED features |
+
+---
+
+## 🎬 See it in action
+
+<div align="center">
+
+<img src="assets/demos/screen-sync-demo.gif" alt="Raptor Link live demo" width="900">
+
+</div>
+
+Raptor Link is designed around **real-time interaction**: change a source, preset or mapping and immediately see the result on the lighting installation.
+
+---
+
+## 🖥️ Application overview
+
+<div align="center">
+
+<table>
+<tr>
+<td width="50%"><img src="assets/screenshots/screenshot-01.png" alt="Raptor Link screenshot 1"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-02.png" alt="Raptor Link screenshot 2"></td>
+</tr>
+<tr>
+<td width="50%"><img src="assets/screenshots/screenshot-03.png" alt="Raptor Link screenshot 3"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-04.png" alt="Raptor Link screenshot 4"></td>
+</tr>
+</table>
+
+</div>
+
+The interface is organized so that the important parts of a lighting setup remain visible and understandable: your devices, the source of the colors, presets and the relationship between the screen and the physical LEDs.
+
+---
+
+## 🧭 Screen → LED mapping
+
+One of the central ideas behind Raptor Link is that a physical LED installation does not always match a simple rectangular strip.
+
+A desk can contain several LED sections. A monitor can have LEDs only on some edges. A room can have several WLED controllers. Raptor Link lets you describe that installation and decide **which LEDs should react to which part of the screen**.
+
+<div align="center">
+
+<table>
+<tr>
+<td width="50%"><img src="assets/screenshots/screenshot-05.png" alt="Screen mapping"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-06.png" alt="LED mapping configuration"></td>
+</tr>
+</table>
+
+</div>
+
+This makes it possible to build Ambilight-style effects while keeping the mapping adapted to the real installation.
+
+### Keyboard / LED addressing in action
+
+<div align="center">
+
+<img src="assets/demos/keyboard-addressing.gif" alt="Raptor Link keyboard and LED addressing demonstration" width="900">
+
+</div>
+
+---
+
+## 🎮 Built for iCUE users — useful without iCUE
+
+The original goal of Raptor Link is simple:
+
+**let DIY WLED lighting live alongside a Corsair iCUE setup instead of remaining isolated from it.**
+
+That means Raptor Link is especially useful if your PC already uses Corsair RGB hardware and you also have custom LED strips, ESP32/ESP8266 controllers or decorative WLED lighting around the desk.
+
+At the same time, the WLED side remains useful on its own. You can use Raptor Link without Corsair hardware when you only need screen ambience, presets or centralized WLED control.
+
+---
+
+## 🌈 Keep the power of WLED
+
+Raptor Link does not try to replace WLED.
+
+WLED remains responsible for the LED controller itself, its effects, segments and presets. Raptor Link sits above it and helps coordinate the installation from the PC.
+
+That means you can keep using the WLED features you already know while adding PC-side control.
+
+<div align="center">
+
+<table>
+<tr>
+<td width="50%"><img src="assets/screenshots/screenshot-07.png" alt="WLED integration"></td>
+<td width="50%"><img src="assets/screenshots/screenshot-08.png" alt="WLED presets"></td>
+</tr>
+</table>
+
+</div>
+
+---
+
+## 🚀 Quick start
+
+1. Install and configure **WLED** on your LED controller.
+2. Connect the PC and WLED device(s) to the same local network.
+3. Download and install **Raptor Link** from the **Releases** section.
+4. Add your WLED controller by IP address.
+5. Configure the physical LED layout / mapping.
+6. Choose how the LEDs should be driven:
+   - screen colors,
+   - WLED presets,
+   - iCUE integration,
+   - or another available Raptor Link mode.
+7. Save the configuration and let Raptor Link run from the system tray.
+
+> **iCUE is only required for the Corsair integration.**
+
+---
+
+## 📥 Download
+
+Prebuilt Windows installers are published through **GitHub Releases**.
+
+### [➡️ Download the latest release](https://github.com/Inter-Raptor/Raptor-Link/releases)
+
+The recommended file name is:
+
+```text
+Raptor-Link-Setup-vX.Y.Z.exe
+```
+
+If no release is visible yet, the public installer has not been uploaded for that version.
+
+---
+
+## 🛠️ Requirements
+
+- Windows 10 or Windows 11
+- One or more devices running WLED
+- PC and WLED devices reachable on the same network
+- Corsair iCUE only when using the iCUE integration
+
+Typical WLED hardware includes ESP32 and ESP8266 based controllers.
+
+---
+
+## 🧩 Typical setups
+
+Raptor Link can fit several kinds of installations:
+
+- RGB lighting behind one or more PC monitors
+- LED strips around a desk
+- WLED wall lighting synchronized with the PC
+- DIY ESP32/ESP8266 LED projects
+- mixed Corsair + WLED gaming setups
+- decorative WLED lighting controlled from Windows
+- screen-reactive ambient lighting
+
+---
+
+## 🖱️ Designed to stay out of the way
+
+Raptor Link can remain accessible from the Windows system tray, so the application does not need to occupy your desktop permanently.
+
+<div align="center">
+
+<img src="assets/icons/system-tray.png" alt="Raptor Link system tray" width="650">
+
+</div>
+
+---
+
+## 📸 More screenshots
+
+<details>
+<summary><b>Open the gallery</b></summary>
+
+<br>
+
+<div align="center">
+
+<img src="assets/screenshots/screenshot-09.png" alt="Raptor Link screenshot 9" width="850">
+
+<br><br>
+
+<img src="assets/screenshots/screenshot-10.png" alt="Raptor Link screenshot 10" width="850">
+
+</div>
+
+</details>
+
+---
+
+## 🗺️ Project direction
+
+Raptor Link is an evolving community project. Current development focuses on making WLED/PC lighting integration easier to configure and more flexible.
+
+Areas of interest include:
+
+- richer iCUE synchronization
+- improved device discovery
+- more visual mapping tools
+- additional preset and automation options
+- improved diagnostics
+- easier first-time setup
+- additional language support
+
+---
+
+## 🐛 Bugs, ideas and feedback
+
+Found a problem? Have an idea that would make Raptor Link better?
+
+Use the GitHub issue templates:
+
+- **Bug report** → something does not work as expected
+- **Feature request** → suggest a new function or improvement
+
+### [➡️ Open an issue](https://github.com/Inter-Raptor/Raptor-Link/issues)
+
+When reporting a bug, include your Raptor Link version, Windows version, WLED version and screenshots/logs when useful.
+
+---
+
+## 🤝 Contributing
+
+Raptor Link is intended to be open, reusable and improvable.
+
+Contributions can include:
+
+- code
+- documentation
+- testing
+- translations
+- hardware compatibility reports
+- UI ideas
+- bug reports
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the contribution guidelines.
+
+---
+
+## 🔐 Security & privacy
+
+Raptor Link communicates with WLED devices on the local network.
+
+Do not publish passwords, Wi-Fi credentials, API keys or private tokens in public issues or screenshots.
+
+See **[SECURITY.md](SECURITY.md)**.
+
+---
+
+## 📜 License
+
+Raptor Link is released under the **MIT License**.
+
+You are free to use, modify, study, redistribute and build on the project under the terms of the license.
+
+See **[LICENSE](LICENSE)**.
+
+---
+
+## ❤️ Credits
+
+Raptor Link exists thanks to the ecosystem around:
+
+- **[WLED](https://github.com/Aircoookie/WLED)** — open-source LED control firmware
+- **[Corsair iCUE](https://www.corsair.com/icue)** — Corsair RGB ecosystem
+
+Raptor Link is an independent community project and is **not affiliated with, endorsed by or sponsored by Corsair or the WLED project**.
+
+---
+
+<div align="center">
+
+### 🦖 Raptor Link
+
+**DIY lighting. PC control. One ecosystem.**
+
+If the project is useful to you, consider giving the repository a ⭐ — it helps other WLED and iCUE users discover it.
+
+</div>
