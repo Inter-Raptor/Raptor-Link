@@ -1,8 +1,8 @@
-RAPTOR LINK 0.3.5 BÊTA — Un projet de Vivien Jardot
+RAPTOR LINK 0.3.7 BÊTA — Un projet de Vivien Jardot
 
 INSTALLATION WINDOWS 64 BITS
 1. Dans l'ancienne application, utilisez Quitter près de l'horloge (pas seulement la croix).
-2. Lancez Raptor-Link-Setup-0.3.5.exe et choisissez le dossier.
+2. Lancez Raptor-Link-Setup-0.3.7.exe et choisissez le dossier.
 3. Ouvrez Raptor Link. Vos réglages Aurora sont repris automatiquement sur le même compte Windows.
 4. Enregistrez puis Démarrez. iCUE doit autoriser pythonw.exe dans ses réglages SDK pour les sources iCUE.
 La configuration reste dans %LOCALAPPDATA%\AuroraWLED pour assurer la migration.
@@ -119,3 +119,17 @@ VERSION 0.3.6 — Communauté, mises à jour et retours intégrés
 - Les diagnostics joints à un retour sont facultatifs et n'incluent pas les adresses IP WLED.
 - Les autres écosystèmes RGB ne sont pas encore annoncés comme compatibles : ils restent en recherche de testeurs.
 - Le correctif de robustesse iCUE/watchdog de la 0.3.5 est inclus.
+
+
+VERSION 0.3.7 — Sources RGB multi-marques utilisables en Bêta
+- Corsair iCUE reste la source TESTÉE & VALIDÉE.
+- MSI Mystic Light, Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB, SteelSeries GG / Prism et OpenRGB sont maintenant sélectionnables comme sources RGB BÊTA.
+- Les sources BÊTA utilisent actuellement le serveur SDK local OpenRGB sur le port 6742 pour accéder au matériel compatible.
+- Lorsqu'une source BÊTA est sélectionnée, l'interface indique clairement qu'elle est encore en création et peut comporter des problèmes.
+- Les appareils OpenRGB sont réellement détectés, leurs LED sont sélectionnables et leurs couleurs peuvent alimenter les zones WLED.
+- Chaque backend reste isolé : une panne OpenRGB ne doit pas bloquer iCUE, WLED, l'activité PC ou le bouton Arrêter.
+- Les retours intégrés servent à valider progressivement les marques et modèles réels.
+
+IMPORTANT
+- Pour une source BÊTA, installez/démarrez OpenRGB et activez son serveur SDK local (port 6742).
+- Raptor Link ne prétend pas encore lire directement l'animation interne des logiciels Mystic Light/RGB Fusion/Aura eux-mêmes : il utilise OpenRGB comme passerelle vers le matériel compatible.
