@@ -534,7 +534,7 @@ class Engine:
                             # interruption instead of making the strip blink.
                             if source_missing and on and not alarm_on and not testing:
                                 if ip not in self.frames:
-                                    states[ip]='En attente de la source…'
+                                    states[ip]=('; '.join(errors)+' · ' if errors else '')+'En attente de la source…'
                                     if http_issue and http_issue!='ok':states[ip]+=' · API WLED en attente'
                                     frames[ip]=[]
                                     continue
