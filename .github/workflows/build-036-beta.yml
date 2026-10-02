@@ -55,6 +55,7 @@ jobs:
           New-Item -ItemType Directory -Path $stage | Out-Null
           Copy-Item ".\RaptorLink" (Join-Path $stage "RaptorLink") -Recurse
           Copy-Item ".\raptor-build" (Join-Path $stage "raptor-build") -Recurse
+          Get-ChildItem $stage -Directory -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force
           $zip = Join-Path (Get-Location) "Raptor-Link-0.3.6-Projet.zip"
           Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal -Force
           if (!(Test-Path $zip)) { throw "Project ZIP was not generated" }
