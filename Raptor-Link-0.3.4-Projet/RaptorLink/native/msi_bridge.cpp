@@ -11,6 +11,7 @@
 #include <fstream>
 
 using InitializeFn = int (__cdecl*)();
+using ReleaseFn = int (__cdecl*)();
 using GetDeviceInfoFn = int (__cdecl*)(SAFEARRAY**, SAFEARRAY**);
 using GetLedInfoFn = int (__cdecl*)(BSTR, DWORD, BSTR*, SAFEARRAY**);
 using GetLedColorFn = int (__cdecl*)(BSTR, DWORD, DWORD*, DWORD*, DWORD*);
@@ -95,7 +96,11 @@ int wmain(int argc,wchar_t** argv){
     std::wstring stagePath=argc>=3?argv[2]:L"";
     writeStage(stagePath,"process_started",0);
     auto slash=dllPath.find_last_of(L"\\/");
-    if(slash!=std::wstring::npos) SetDllDirectoryW(dllPath.substr(0,slash).c_str());
+    if(slash!=std::wstring::npos){
+        std::wstring dllDir=dllPath.substr(0,slash);
+        SetDllDirectoryW(dllDir.c_str());
+        SetCurrentDirectoryW(dllDir.c_str());
+    }
 
     HRESULT co=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
     writeStage(stagePath,"com_initialized",(long long)co);
@@ -106,6 +111,7 @@ int wmain(int argc,wchar_t** argv){
         if(SUCCEEDED(co)) CoUninitialize(); return 3;
     }
     auto init=(InitializeFn)GetProcAddress(mod,"MLAPI_Initialize");
+    auto release=(ReleaseFn)GetProcAddress(mod,"MLAPI_Release");
     auto getInfo=(GetDeviceInfoFn)GetProcAddress(mod,"MLAPI_GetDeviceInfo");
     auto getLedInfo=(GetLedInfoFn)GetProcAddress(mod,"MLAPI_GetLedInfo");
     auto getColor=(GetLedColorFn)GetProcAddress(mod,"MLAPI_GetLedColor");
@@ -126,12 +132,25 @@ int wmain(int argc,wchar_t** argv){
         FreeLibrary(mod); if(SUCCEEDED(co)) CoUninitialize(); return 6;
     }
 
+    // Several working Mystic Light integrations wait after MLAPI_Initialize
+    // before querying devices. MSI Center may need a short time to expose its
+    // service/COM state; querying immediately has been observed to terminate
+    // the vendor DLL on some systems.
+    writeStage(stagePath,"msi_warmup",0,"1500 ms");
+    Sleep(1500);
+
     std::vector<Device> devices;
     auto scan=[&](int& infoCode,DWORD& infoSeh)->bool{
         SAFEARRAY* types=nullptr;SAFEARRAY* counts=nullptr;infoCode=999999;infoSeh=0;
-        writeStage(stagePath,"before_get_device_info",0);
-        infoCode=call_info(getInfo,&types,&counts,&infoSeh);
-        writeStage(stagePath,"after_get_device_info",infoCode,infoSeh?("SEH "+std::to_string(infoSeh)):"");
+        for(int attempt=1;attempt<=5;attempt++){
+            writeStage(stagePath,"before_get_device_info",attempt,"attempt "+std::to_string(attempt));
+            infoCode=call_info(getInfo,&types,&counts,&infoSeh);
+            writeStage(stagePath,"after_get_device_info",infoCode,infoSeh?("SEH "+std::to_string(infoSeh)):("attempt "+std::to_string(attempt)));
+            if(infoSeh||infoCode==0)break;
+            if(types){SafeArrayDestroy(types);types=nullptr;}
+            if(counts){SafeArrayDestroy(counts);counts=nullptr;}
+            Sleep(1000);
+        }
         if(infoSeh||infoCode!=0){if(types)SafeArrayDestroy(types);if(counts)SafeArrayDestroy(counts);return false;}
         auto names=arrayStrings(types);auto nums=arrayStrings(counts);
         if(types)SafeArrayDestroy(types);if(counts)SafeArrayDestroy(counts);
@@ -196,5 +215,6 @@ int wmain(int argc,wchar_t** argv){
         std::cout<<out.str()<<"\n"<<std::flush;
     }
     writeStage(stagePath,"stdin_closed",0);
+    if(release)release();
     FreeLibrary(mod);if(SUCCEEDED(co))CoUninitialize();return 0;
 }
