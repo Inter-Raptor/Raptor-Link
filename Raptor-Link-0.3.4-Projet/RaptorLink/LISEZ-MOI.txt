@@ -1,8 +1,8 @@
-RAPTOR LINK 0.3.8 BÊTA — Un projet de Vivien Jardot
+RAPTOR LINK 0.3.9 DIAGNOSTIC BÊTA — Un projet de Vivien Jardot
 
 INSTALLATION WINDOWS 64 BITS
 1. Dans l'ancienne application, utilisez Quitter près de l'horloge (pas seulement la croix).
-2. Lancez Raptor-Link-Setup-0.3.8.exe et choisissez le dossier.
+2. Lancez Raptor-Link-Setup-0.3.9.exe et choisissez le dossier.
 3. Ouvrez Raptor Link. Vos réglages Aurora sont repris automatiquement sur le même compte Windows.
 4. Enregistrez puis Démarrez. iCUE doit autoriser pythonw.exe dans ses réglages SDK pour les sources iCUE.
 La configuration reste dans %LOCALAPPDATA%\AuroraWLED pour assurer la migration.
@@ -144,3 +144,11 @@ VERSION 0.3.8 — MSI Mystic Light natif, sans OpenRGB
 - Le pont MSI fonctionne dans un processus séparé avec watchdog pour éviter qu'un blocage du SDK MSI ne fige Raptor Link.
 - Certaines animations dynamiques Mystic Light peuvent ne pas exposer une trame RGB instantanée complète via le SDK public. La fonction reste donc BÊTA et les retours utilisateur sont importants.
 - Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB et SteelSeries GG / Prism restent BÊTA via OpenRGB dans cette version.
+
+
+VERSION 0.3.9 — Diagnostic MSI Mystic Light
+- Corrige le texte erroné « Choisissez un appareil iCUE » lorsqu'une zone utilise MSI Mystic Light.
+- Ajoute un diagnostic MSI détaillé directement dans Sources RGB.
+- Le diagnostic affiche la présence de la DLL, MLAPI_Initialize, MLAPI_GetDeviceInfo, les types retournés, les nombres de LED, le nombre d'appareils créés par Raptor Link et la dernière erreur.
+- Cette version sert à identifier précisément pourquoi certaines cartes mères MSI visibles dans MSI Center ne remontent pas via le SDK public Mystic Light.
+- Le connecteur MSI reste BÊTA NATIVE · SANS OPENRGB.
