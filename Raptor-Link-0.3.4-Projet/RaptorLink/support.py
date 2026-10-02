@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-APP_VERSION = "0.3.8"
+APP_VERSION = "0.3.9"
 REPOSITORY = "Inter-Raptor/Raptor-Link"
 RELEASES_API = f"https://api.github.com/repos/{REPOSITORY}/releases?per_page=10"
 ISSUES_NEW = f"https://github.com/{REPOSITORY}/issues/new"
