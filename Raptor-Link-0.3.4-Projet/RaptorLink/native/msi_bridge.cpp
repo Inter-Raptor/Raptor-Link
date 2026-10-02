@@ -8,6 +8,7 @@
 #include <vector>
 #include <iomanip>
 #include <algorithm>
+#include <fstream>
 
 using InitializeFn = int (__cdecl*)();
 using GetDeviceInfoFn = int (__cdecl*)(SAFEARRAY**, SAFEARRAY**);
@@ -78,18 +79,30 @@ static unsigned long long fnv(const std::wstring& s){
 }
 struct Device{std::wstring type;int leds=0;std::vector<std::wstring> ledNames;};
 static std::string hex8(unsigned long long v){std::ostringstream o;o<<std::hex<<std::setfill('0')<<std::setw(16)<<v;return o.str();}
+static void writeStage(const std::wstring& path,const std::string& stage,long long code=0,const std::string& detail=""){
+    if(path.empty())return;
+    std::ofstream out(path,std::ios::binary|std::ios::trunc);
+    if(!out)return;
+    out<<"{\"native_helper\":true,\"stage\":\""<<stage<<"\",\"code\":"<<code<<",\"detail\":\"";
+    for(char c:detail){if(c=='"'||c=='\\')out<<'\\';if(c=='\n')out<<"\\n";else if(c!='\r')out<<c;}
+    out<<"\"}";
+}
 
 int wmain(int argc,wchar_t** argv){
     std::ios::sync_with_stdio(false);
     if(argc<2){std::cout<<"{\"ok\":false,\"fatal\":true,\"error\":\"DLL MSI manquante\"}\n"<<std::flush;return 2;}
     std::wstring dllPath=argv[1];
+    std::wstring stagePath=argc>=3?argv[2]:L"";
+    writeStage(stagePath,"process_started",0);
     auto slash=dllPath.find_last_of(L"\\/");
     if(slash!=std::wstring::npos) SetDllDirectoryW(dllPath.substr(0,slash).c_str());
 
     HRESULT co=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
+    writeStage(stagePath,"com_initialized",(long long)co);
     HMODULE mod=LoadLibraryW(dllPath.c_str());
     if(!mod){
-        std::cout<<"{\"ok\":false,\"fatal\":true,\"diagnostic\":{\"native_helper\":true,\"load_error\":"<<GetLastError()<<"},\"error\":\"Impossible de charger la DLL MSI\"}\n"<<std::flush;
+        auto err=GetLastError();writeStage(stagePath,"load_library_failed",err);
+        std::cout<<"{\"ok\":false,\"fatal\":true,\"diagnostic\":{\"native_helper\":true,\"load_error\":"<<err<<"},\"error\":\"Impossible de charger la DLL MSI\"}\n"<<std::flush;
         if(SUCCEEDED(co)) CoUninitialize(); return 3;
     }
     auto init=(InitializeFn)GetProcAddress(mod,"MLAPI_Initialize");
@@ -97,10 +110,13 @@ int wmain(int argc,wchar_t** argv){
     auto getLedInfo=(GetLedInfoFn)GetProcAddress(mod,"MLAPI_GetLedInfo");
     auto getColor=(GetLedColorFn)GetProcAddress(mod,"MLAPI_GetLedColor");
     if(!init||!getInfo||!getLedInfo||!getColor){
+        writeStage(stagePath,"exports_missing",1);
         std::cout<<"{\"ok\":false,\"fatal\":true,\"diagnostic\":{\"native_helper\":true,\"exports_ok\":false},\"error\":\"Fonctions MSI SDK manquantes\"}\n"<<std::flush;
         FreeLibrary(mod); if(SUCCEEDED(co)) CoUninitialize(); return 4;
     }
+    writeStage(stagePath,"before_initialize",0);
     DWORD sehCode=0; int initCode=call_init(init,&sehCode);
+    writeStage(stagePath,"after_initialize",initCode,sehCode?("SEH "+std::to_string(sehCode)):"");
     if(sehCode){
         std::cout<<"{\"ok\":false,\"fatal\":true,\"diagnostic\":{\"native_helper\":true,\"initialize_exception\":"<<sehCode<<"},\"error\":\"Exception native pendant MLAPI_Initialize\"}\n"<<std::flush;
         FreeLibrary(mod); if(SUCCEEDED(co)) CoUninitialize(); return 5;
@@ -113,7 +129,9 @@ int wmain(int argc,wchar_t** argv){
     std::vector<Device> devices;
     auto scan=[&](int& infoCode,DWORD& infoSeh)->bool{
         SAFEARRAY* types=nullptr;SAFEARRAY* counts=nullptr;infoCode=999999;infoSeh=0;
+        writeStage(stagePath,"before_get_device_info",0);
         infoCode=call_info(getInfo,&types,&counts,&infoSeh);
+        writeStage(stagePath,"after_get_device_info",infoCode,infoSeh?("SEH "+std::to_string(infoSeh)):"");
         if(infoSeh||infoCode!=0){if(types)SafeArrayDestroy(types);if(counts)SafeArrayDestroy(counts);return false;}
         auto names=arrayStrings(types);auto nums=arrayStrings(counts);
         if(types)SafeArrayDestroy(types);if(counts)SafeArrayDestroy(counts);
@@ -125,21 +143,25 @@ int wmain(int argc,wchar_t** argv){
             Device d;d.type=names[di];d.leds=count;d.ledNames.resize(count);
             BSTR type=SysAllocStringLen(d.type.data(),(UINT)d.type.size());
             for(int li=0;li<count;li++){
+                writeStage(stagePath,"before_get_led_info",(long long)li,utf8(d.type));
                 BSTR led=nullptr;SAFEARRAY* styles=nullptr;DWORD ex=0;
                 int c=call_ledinfo(getLedInfo,type,(DWORD)li,&led,&styles,&ex);
+                writeStage(stagePath,"after_get_led_info",(long long)c,utf8(d.type)+" #"+std::to_string(li));
                 if(c==0&&led)d.ledNames[li]=std::wstring(led,SysStringLen(led));
                 else d.ledNames[li]=L"LED "+std::to_wstring(li+1);
                 if(led)SysFreeString(led);if(styles)SafeArrayDestroy(styles);
             }
             SysFreeString(type);devices.push_back(std::move(d));
         }
+        writeStage(stagePath,"scan_complete",(long long)devices.size());
         return true;
     };
 
-    int infoCode=999999;DWORD infoSeh=0;scan(infoCode,infoSeh);
+    int infoCode=999999;DWORD infoSeh=0;
+    writeStage(stagePath,"ready_for_command",initCode);
     std::string cmd;
     while(std::getline(std::cin,cmd)){
-        if(cmd=="SCAN") scan(infoCode,infoSeh);
+        if(cmd=="SCAN" || devices.empty()) scan(infoCode,infoSeh);
         std::ostringstream out;
         out<<"{\"ok\":"<<(infoCode==0&&infoSeh==0?"true":"false")<<",\"fatal\":false,\"devices\":[";
         for(size_t di=0;di<devices.size();di++){
@@ -157,8 +179,10 @@ int wmain(int argc,wchar_t** argv){
             BSTR type=SysAllocStringLen(d.type.data(),(UINT)d.type.size());
             for(int li=0;li<d.leds;li++){
                 if(li)out<<",";
+                writeStage(stagePath,"before_get_led_color",(long long)li,utf8(d.type));
                 DWORD r=0,g=0,b=0,ex=0;
                 int cc=call_color(getColor,type,(DWORD)li,&r,&g,&b,&ex);
+                writeStage(stagePath,"after_get_led_color",(long long)cc,utf8(d.type)+" #"+std::to_string(li));
                 out<<"\""<<li<<"\":["<<(cc==0?std::min<DWORD>(255,r):0)<<","<<(cc==0?std::min<DWORD>(255,g):0)<<","<<(cc==0?std::min<DWORD>(255,b):0)<<"]";
             }
             SysFreeString(type);out<<"}";
@@ -168,7 +192,9 @@ int wmain(int argc,wchar_t** argv){
         out<<"],\"raw_led_counts\":[";
         for(size_t i=0;i<devices.size();i++){if(i)out<<",";out<<"\""<<devices[i].leds<<"\"";}
         out<<"]},\"error\":\""<<(infoCode==0&&infoSeh==0?"":"Echec MLAPI_GetDeviceInfo")<<"\"}";
+        writeStage(stagePath,"response_written",(long long)devices.size());
         std::cout<<out.str()<<"\n"<<std::flush;
     }
+    writeStage(stagePath,"stdin_closed",0);
     FreeLibrary(mod);if(SUCCEEDED(co))CoUninitialize();return 0;
 }
