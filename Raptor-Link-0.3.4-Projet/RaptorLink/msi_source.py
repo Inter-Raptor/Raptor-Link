@@ -74,9 +74,9 @@ class MsiWorker:
         self.last_progress=time.monotonic();self.last_ok=0.0;self.restarts=0;self.dll_path=find_msi_sdk(self.data_dir)
         self.thread=threading.Thread(target=self.loop,daemon=True,name="RaptorLink-MSI-bridge");self.thread.start()
     def _command(self):
-        root=Path(__file__).resolve().parent;runtime=root/"runtime"/"python.exe"
-        python=str(runtime if runtime.exists() else Path(sys.executable))
-        return [python,"-u",str(root/"msi_worker.py"),str(self.dll_path)]
+        root=Path(__file__).resolve().parent
+        helper=root/"native"/"msi_bridge.exe"
+        return [str(helper),str(self.dll_path)]
     def configure(self,required,force_scan=False,fps=12):
         with self.lock:
             self.required={str(x) for x in required if str(x).startswith("msi:")}
@@ -124,12 +124,16 @@ class MsiWorker:
         self._dispose(p)
     def _start(self):
         if not self.dll_path:return None
+        command=self._command()
+        if not Path(command[0]).exists():
+            self._publish(error="Pont MSI natif absent de cette installation",diagnostic={"native_helper":False,"helper_path":command[0]})
+            return None
         flags=getattr(subprocess,"CREATE_NO_WINDOW",0) if os.name=="nt" else 0
-        p=subprocess.Popen(self._command(),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
-                           text=True,encoding="utf-8",bufsize=1,cwd=str(Path(__file__).resolve().parent),creationflags=flags)
+        p=subprocess.Popen(command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
+                           text=True,encoding="utf-8",bufsize=1,cwd=str(Path(command[0]).parent),creationflags=flags)
         with self.lock:self.process=p;self.restarts+=1
         return p
-    def _publish(self,data=None,error=None):
+    def _publish(self,data=None,error=None,diagnostic=None):
         with self.lock:
             if data is not None:
                 self.devices=copy.deepcopy(data.get("devices",[]))
@@ -137,6 +141,7 @@ class MsiWorker:
                 self.error=str(data.get("error",""))
                 self.diagnostic=copy.deepcopy(data.get("diagnostic",self.diagnostic))
                 if data.get("ok"):self.last_ok=time.monotonic()
+            if diagnostic is not None:self.diagnostic=copy.deepcopy(diagnostic)
             if error is not None:
                 self.error=str(error)
                 self.diagnostic={**self.diagnostic,'exception_message':str(error)}
@@ -157,11 +162,12 @@ class MsiWorker:
                 with self.lock:
                     required=sorted(self.required);force=self.force_scan;self.force_scan=False;interval=self.interval
                 do_scan=force or now-last_scan>5
-                request={"required":required,"scan":do_scan}
                 with self.lock:self.busy_since=time.monotonic();self.operation="détection MSI Mystic Light" if do_scan else "lecture des couleurs MSI"
-                process.stdin.write(json.dumps(request,separators=(",",":"))+"\n");process.stdin.flush()
+                process.stdin.write(("SCAN" if do_scan else "READ")+"\n");process.stdin.flush()
                 line=process.stdout.readline()
-                if not line:raise RuntimeError("pont MSI Mystic Light interrompu")
+                if not line:
+                    code=process.poll()
+                    raise RuntimeError("pont MSI natif interrompu"+("" if code is None else " (code "+str(code)+")"))
                 data=json.loads(line)
                 with self.lock:self.busy_since=None;self.operation=""
                 if do_scan:last_scan=time.monotonic()
@@ -170,5 +176,7 @@ class MsiWorker:
                 self.done.wait(interval)
             except Exception as exc:
                 with self.lock:self.busy_since=None;self.operation=""
-                self._publish(error=exc);self._dispose(process);process=None;retry_at=time.monotonic()+2
+                returncode=process.poll() if process is not None else None
+                self._publish(error=exc,diagnostic={**self.diagnostic,"bridge_exit_code":returncode,"native_helper":True})
+                self._dispose(process);process=None;retry_at=time.monotonic()+2
         self._dispose(process)
