@@ -1,8 +1,8 @@
-RAPTOR LINK 0.3.10 BÊTA — Un projet de Vivien Jardot
+RAPTOR LINK 0.3.11 BÊTA DIAGNOSTIC MSI — Un projet de Vivien Jardot
 
 INSTALLATION WINDOWS 64 BITS
 1. Dans l'ancienne application, utilisez Quitter près de l'horloge (pas seulement la croix).
-2. Lancez Raptor-Link-Setup-0.3.10.exe et choisissez le dossier.
+2. Lancez Raptor-Link-Setup-0.3.11.exe et choisissez le dossier.
 3. Ouvrez Raptor Link. Vos réglages Aurora sont repris automatiquement sur le même compte Windows.
 4. Enregistrez puis Démarrez. iCUE doit autoriser pythonw.exe dans ses réglages SDK pour les sources iCUE.
 La configuration reste dans %LOCALAPPDATA%\AuroraWLED pour assurer la migration.
@@ -161,3 +161,11 @@ VERSION 0.3.10 — Pont MSI natif C++
 - En cas d'exception native, le processus principal Raptor Link reste vivant et le diagnostic affiche le code de sortie.
 - MSI Mystic Light reste BÊTA NATIVE · SANS OPENRGB.
 - Le diagnostic MSI détaillé de la 0.3.9 est conservé.
+
+
+VERSION 0.3.11 — Diagnostic MSI natif par étape
+- Corrige l'erreur Accès refusé lors de la réinstallation du SDK MSI en arrêtant proprement le pont MSI avant de remplacer la DLL.
+- Le pont C++ ne lance plus automatiquement une détection complète avant de répondre.
+- Un journal d'étape local indique désormais exactement où le pont natif s'interrompt : chargement DLL, initialisation MSI, GetDeviceInfo, GetLedInfo ou GetLedColor.
+- Le diagnostic MSI de l'interface affiche la dernière étape atteinte et son code.
+- Le pont MSI est compilé avec le runtime C++ statique pour réduire les dépendances externes.
