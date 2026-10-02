@@ -2,17 +2,17 @@ Unicode True
 !include "MUI2.nsh"
 !include "x64.nsh"
 Name "Raptor Link"
-OutFile "../Raptor-Link-Setup-0.3.4.exe"
+OutFile "../Raptor-Link-Setup-0.3.5.exe"
 InstallDir "$LOCALAPPDATA\Programs\RaptorLink"
 InstallDirRegKey HKCU "Software\AuroraWLED" "InstallDir"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
 Icon "../RaptorLink/icon.ico"
 UninstallIcon "../RaptorLink/icon.ico"
-VIProductVersion "0.3.4.0"
+VIProductVersion "0.3.5.0"
 VIAddVersionKey "ProductName" "Raptor Link"
 VIAddVersionKey "FileDescription" "Raptor Link - installation Windows"
-VIAddVersionKey "FileVersion" "0.3.4"
+VIAddVersionKey "FileVersion" "0.3.5"
 VIAddVersionKey "LegalCopyright" "Application independante - 2026"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Bienvenue dans Raptor Link"
@@ -55,7 +55,7 @@ Section "Raptor Link"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "DisplayName" "Raptor Link"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "UninstallString" '"$INSTDIR\Desinstaller.exe"'
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "DisplayIcon" "$INSTDIR\icon.ico"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "DisplayVersion" "0.3.4 beta"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "DisplayVersion" "0.3.5 beta"
  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "NoModify" 1
  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "NoRepair" 1
 SectionEnd
