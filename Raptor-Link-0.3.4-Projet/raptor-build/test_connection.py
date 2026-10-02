@@ -2,8 +2,9 @@ import sys,unittest
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path('RaptorLink').resolve()))
-from engine import probe_target
+from engine import probe_target,packets
 from features import Fade,gate,extras
+
 class Connection(unittest.TestCase):
  def test_regular_checks_never_switch_off(self):
   t={'ip':'192.168.1.175','count':257};calls=[]
@@ -13,8 +14,14 @@ class Connection(unittest.TestCase):
   with patch('engine.http',fake):
    self.assertEqual(probe_target(t,True)['bri'],128)
    for _ in range(20):self.assertIsNone(probe_target(t,False))
-  self.assertEqual(sum(p is not None for _,p in calls),1)
-  self.assertTrue(all(p is None for _,p in calls[3:]))
+  self.assertTrue(all(payload is None for _,payload in calls))
+  self.assertEqual([path for path,_ in calls[:2]],['/json/info','/json/state'])
+
+ def test_realtime_packet_keeps_wled_alive_for_short_gaps(self):
+  packet=packets([(1,2,3)])[0]
+  self.assertEqual(packet[0],2)
+  self.assertEqual(packet[1],5)
+
  def test_fade_recovers_after_idle(self):
   f=Fade()
   for _ in range(100):f.step(True,.04,3,2)
@@ -23,4 +30,5 @@ class Connection(unittest.TestCase):
   self.assertEqual(f.value,0)
   for _ in range(100):f.step(True,.04,3,2)
   self.assertEqual(f.value,1)
+
 if __name__=='__main__':unittest.main()
