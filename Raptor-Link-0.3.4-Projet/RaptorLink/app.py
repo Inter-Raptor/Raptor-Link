@@ -176,6 +176,8 @@ class App:
                     elif self.path=='/api/plan':app.engine.plan_frame=[];app.engine.plan_ip=str(data.get('ip',''))
                     elif self.path=='/api/preview':app.engine.preview_device=str(data.get('device',''))
                     elif self.path=='/api/refresh':app.engine.scan_requested=True
+                    elif self.path=='/api/msi-status':result=app.engine.msi_status()
+                    elif self.path=='/api/msi-install':result=app.engine.install_msi_sdk()
                     elif self.path=='/api/probe':
                         if DEMO:result={'name':'WLED Démonstration','count':160,'version':'demo'}
                         else:
