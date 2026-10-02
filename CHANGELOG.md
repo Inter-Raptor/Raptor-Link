@@ -4,6 +4,16 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.3.13 Beta
+
+- Restored the classic Raptor Link experience: the normal UI is again centered on **Corsair iCUE** and Raptor Link's own direct sources (screen, audio and local effects).
+- Corsair iCUE remains the only third-party RGB integration presented as **Tested & Validated** in normal mode.
+- MSI Mystic Light, OpenRGB and the other vendor experiments are hidden behind **Settings → Advanced → RGB lab** and are disabled by default.
+- Experimental vendor workers are not started while RGB lab mode is disabled.
+- Existing experimental mappings are preserved but clearly shown as disabled until the RGB lab is enabled again.
+- Built-in update checks, Help & Feedback, questions/comments, bug reports and the optional one-time rating prompt are all retained.
+- The MSI diagnostic/testing code remains available for development without cluttering the normal user experience.
+
 ## 0.3.12 Beta
 
 - MSI native helper now waits 1.5 seconds after MLAPI_Initialize before MLAPI_GetDeviceInfo.
