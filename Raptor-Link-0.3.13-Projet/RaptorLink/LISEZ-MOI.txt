@@ -1,0 +1,184 @@
+RAPTOR LINK 0.3.11 BÊTA DIAGNOSTIC MSI — Un projet de Vivien Jardot
+
+INSTALLATION WINDOWS 64 BITS
+1. Dans l'ancienne application, utilisez Quitter près de l'horloge (pas seulement la croix).
+2. Lancez Raptor-Link-Setup-0.3.11.exe et choisissez le dossier.
+3. Ouvrez Raptor Link. Vos réglages Aurora sont repris automatiquement sur le même compte Windows.
+4. Enregistrez puis Démarrez. iCUE doit autoriser pythonw.exe dans ses réglages SDK pour les sources iCUE.
+La configuration reste dans %LOCALAPPDATA%\AuroraWLED pour assurer la migration.
+L'installation neuve se fait par défaut dans %LOCALAPPDATA%\Programs\RaptorLink.
+Une mise à jour peut reprendre votre ancien dossier d'installation.
+Le menu Démarrer, le raccourci bureau et le désinstalleur portent le nom Raptor Link.
+
+DÉMARRAGE AUTOMATIQUE
+Automatismes > Lancer avec Windows + Synchroniser automatiquement > Enregistrer.
+La croix ferme l'interface ; l'application poursuit la synchronisation dans la zone de notification.
+Quitter arrête le moteur. Profils et mode film sont accessibles près de l'horloge.
+Le PC doit rester allumé, la session ouverte et l'application lancée pour les horaires et réveils.
+Cette version ne réveille pas un PC en veille et ne s'exécute pas avant l'ouverture de session.
+
+PRISE EN MAIN
+Au premier lancement : Commencer / Plus tard / Ne plus proposer.
+Réglages > Revoir le tutoriel permet de le reprendre.
+L'assistant guidé vérifie le WLED puis aide à choisir une source.
+Tester cet éclairage le fait clignoter trois secondes ; les horaires restent prioritaires.
+
+SOURCES ET ZONES
+iCUE : clavier, RAM, ventilateurs ou autres appareils uniquement si leurs LED sont exposées par le SDK Corsair.
+Choisissez une ligne horizontale, verticale ou une sélection libre. Rien n'est écrit sur les appareils Corsair.
+Effets locaux : arc-en-ciel, respiration, comète ou couleur fixe, sans dépendance à iCUE.
+Écran : couleurs des écrans sélectionnés pour la zone, le long du tracé configuré dans Correspondance écran → LED.
+Audio : sélection explicite d'une entrée d'enregistrement Windows dans Réglages.
+Pour la musique du PC : entrée Mixage stéréo si le pilote la propose (à activer dans les réglages Son Windows).
+Sinon : microphone ou entrée audio virtuelle configurée par l'utilisateur. Capture des sorties haut-parleurs, casque et HDMI intégrée via WASAPI loopback (PyAudioWPatch 0.2.12.8). Dans Réglages, choisissez Sortie Windows par défaut ou une sortie précise. La sortie par défaut est résolue au lancement de la capture. Relancez la synchronisation pour changer de sortie par défaut à chaud.
+Aucune image ni aucun son n'est conservé. Les captures sont traitées localement.
+Chaque zone dispose de luminosité, sens, décalage, répétition, fondu entre couleurs et vitesse/couleur pour les effets concernés.
+La répartition spatiale iCUE utilise les positions du tracé pour échantillonner la liste des LED sélectionnées selon l'axe choisi.
+
+HORAIRES ET RÉVEIL
+Chaque fiche WLED possède une plage et des jours actifs. Les plages traversant minuit sont acceptées.
+- Selon l'utilisation du PC : respecte l'inactivité et le verrouillage dans la plage.
+- En continu : ignore l'inactivité ET le verrouillage dans la plage.
+En dehors : extinction immédiate, même avec le mode film ou un réveil programmé.
+Deux heures identiques correspondent à 24 h sur les jours cochés.
+Réveil : une fois dans la minute choisie, pour la durée réglée, puis retour au mode normal.
+Le réveil ignore l'inactivité mais respecte le verrouillage (hors mode continu) et la plage horaire.
+Pas de rattrapage après une heure manquée. Le dernier réveil déclenché est mémorisé pour éviter un doublon après redémarrage.
+Fondu d'allumage : au lancement et à la reprise après inactivité, de 0 à la luminosité réglée.
+Fondu d'extinction : après inactivité/verrouillage. Les limites horaires et la sortie du programme restent prioritaires.
+Mode film : ignore l'inactivité, jamais la plage horaire. Il est limité à la session de l'application.
+
+PROFILS
+Un profil mémorise tous les éclairages et leurs réglages de zones/horaires/réveil.
+Les options générales (Windows, fondus, langue, entrée audio) restent communes.
+La sélection d'un profil depuis l'icône Windows actualise l'interface si aucun brouillon n'est en cours.
+Exporter permet de conserver une sauvegarde incluant les profils. Importer désactive le lancement automatique importé.
+
+ROBUSTESSE
+Un appareil absent est réessayé périodiquement sans interrompre les autres flux.
+Une source iCUE manquante met la zone concernée au noir ; les autres zones poursuivent leurs effets.
+Les changements d'identifiant iCUE sont réassociés par numéro de série ou modèle unique connu ; les ambiguïtés nécessitent un choix manuel.
+Après un redémarrage du WLED, la connexion est revérifiée et le flux reprend avec un état de repli éteint.
+En veille ou arrêt brutal du PC, le délai du flux temps réel WLED est de 2 secondes.
+Ne lancez pas simultanément l'ancien pont ICUE-WLED et Raptor Link.
+
+VALIDATION
+Tests automatisés des horaires, priorités, fondus, répartition, profils et isolation des sources invalides.
+Tests d'interface dans un navigateur avec appareils simulés.
+Cette bêta n'a pas été exécutée sur du matériel Windows/iCUE/WLED réel dans l'environnement de développement.
+Le pont iCUE/WLED précédent a été validé par Vivien ; les nouvelles fonctions natives restent à valider sur son PC.
+
+COMPOSANTS
+Python 3.13.7, SDK Corsair 4.0.84, Pillow, pystray et six ; WLED installé sur les contrôleurs.
+Application indépendante, non affiliée à Corsair. Marques et composants tiers appartiennent à leurs auteurs.
+Les composants sont fournis avec les fichiers de licence présents dans le paquet. Avant une diffusion publique, vérifier les droits de redistribution du SDK Corsair et compléter les mentions requises.
+Sources livrées dans le dossier d'installation : app.py, engine.py, features.py, capture.py, cue_base.py et web/.
+Documentation audio Microsoft : https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveinopen
+
+CORRECTIFS 0.3.1
+Bandeau à hauteur automatique : logo et texte entièrement visibles.
+Présence : vérification complémentaire du curseur et de l’état des touches, sans conserver les frappes.
+Compteur de diagnostic dans Automatismes, niveau audio dans Réglages.
+La cause exacte du problème d’inactivité observé sur le PC de Vivien ne peut pas être reproduite dans cet environnement Linux.
+
+VERSION 0.3.2 — Logo SVG vectoriel animé par forme dans le menu et le bandeau. Repères de construction retirés ; œil conservé sombre. Option de désactivation et préférence système de réduction des animations respectées.
+
+VERSION 0.3.4 — Les contrôles périodiques WLED sont désormais en lecture seule. L’état OFF de repli est posé uniquement à la prise en charge initiale ou après une perte de connexion détectée. Ajout de l’état et du délai effectivement appliqué dans la fiche WLED.
+
+NOUVEAUTÉS 0.3.4
+- Un deuxième lancement restaure la fenêtre existante sous Windows (Edge/Chrome). Un profil navigateur local séparé évite de mélanger cette fenêtre avec vos onglets habituels.
+- Jusqu’à 32 réveils par éclairage, avec nom, activation, heure, jours, animation et durée indépendants. L’ancien réveil est conservé. Un nouveau réveil remplace celui en cours ; à heure identique, le dernier de la liste gagne.
+- Réglages avancés de la zone > Fondu entre couleurs : 0 à 60 secondes. Le fondu est linéaire ; 0 est instantané. Un changement avant la fin repart de la couleur affichée. Ce réglage concerne la source de la zone, pas l’animation prioritaire du réveil.
+- Correspondance écran → LED : plan facultatif pour échantillonner les couleurs de l’écran ou répartir iCUE selon un axe. Aucun effet sur la copie normale des touches ni sur les effets autonomes.
+Enregistrez puis relancez la synchronisation après modification.
+
+CORRESPONDANCE ÉCRAN → LED
+Choisissez la source « Couleurs d’un ou plusieurs écrans » dans la zone. Sélectionnez l’écran principal, tous les écrans ou une sélection. Le plan permet aussi de cocher les écrans concernés. Leur disposition Windows est reprise automatiquement. Le mode « Déplacer les écrans » permet une disposition personnalisée par zone ; « Reprendre la disposition Windows » l’annule. Cela ne modifie pas Windows.
+Chaque pastille LED prend la couleur à sa position dans l’image. Passez en mode « Dessiner / déplacer les points LED » et déplacez les gros points. Cliquez ailleurs pour ajouter un point ; double-cliquez un point pour le retirer. Ajouter ou retirer un point remet les quantités en répartition automatique ; les déplacer conserve vos quantités.
+Activez « Indiquer le nombre réel de LED entre chaque point », puis renseignez chaque segment. Exemple : 5, 100 et 152 LED = 257 LED. Le total doit correspondre à la plage de la zone. Un segment de 0 LED représente un passage sans éclairage.
+Enregistrez puis démarrez. Le plan affiche chaque LED de la zone sélectionnée. Cochez « Afficher l’image des écrans en direct » pour voir l’image analysée derrière le tracé. Les images restent en mémoire sur le PC et ne sont pas enregistrées. L’aperçu s’arrête au verrouillage. Le flux LED affiché représente les valeurs produites, sans retour matériel confirmant leur réception.
+Les écrans sélectionnés forment une surface commune ; les espaces sans écran sont noirs. Un écran absent entraîne une zone noire et un diagnostic. Actualisez les écrans après un changement de branchement.
+Pour une source iCUE normale ou un effet autonome, le plan montre la forme du ruban sans modifier les couleurs. L’option iCUE « Répartir selon le plan » permet une correspondance horizontale ou verticale parmi les LED sélectionnées.
+
+VALIDATION 0.3.4
+Tests automatisés : migrations, plusieurs réveils et priorités, durée du fondu et changement pendant transition, positions et quantités des LED, capture composite simulée avec coordonnées négatives et disposition personnalisée, navigation/enregistrement/réouverture de l’interface.
+La mise au premier plan et la capture réelle multi-écran doivent être vérifiées sur Windows ; cet environnement de construction ne possède pas votre matériel.
+
+
+VERSION 0.3.5 — Correctif de robustesse iCUE
+- Le SDK Corsair est isolé dans un processus séparé.
+- Un watchdog redémarre automatiquement le pont iCUE s'il ne répond plus.
+- Un blocage iCUE ne doit plus figer l'activité PC, les WLED ni le bouton Arrêter.
+
+
+VERSION 0.3.6 — Communauté, mises à jour et retours intégrés
+- Vérification non bloquante des nouvelles Releases GitHub au démarrage.
+- Centre Aide & retours pour préparer questions, bugs, suggestions et commentaires.
+- Demande facultative de note après environ une heure d'utilisation cumulée ; une note validée n'est plus redemandée.
+- Programme communautaire de tests pour MSI Mystic Light, Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB, SteelSeries GG / Prism et OpenRGB.
+- Les diagnostics joints à un retour sont facultatifs et n'incluent pas les adresses IP WLED.
+- Les autres écosystèmes RGB ne sont pas encore annoncés comme compatibles : ils restent en recherche de testeurs.
+- Le correctif de robustesse iCUE/watchdog de la 0.3.5 est inclus.
+
+
+VERSION 0.3.7 — Sources RGB multi-marques utilisables en Bêta
+- Corsair iCUE reste la source TESTÉE & VALIDÉE.
+- MSI Mystic Light, Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB, SteelSeries GG / Prism et OpenRGB sont maintenant sélectionnables comme sources RGB BÊTA.
+- Les sources BÊTA utilisent actuellement le serveur SDK local OpenRGB sur le port 6742 pour accéder au matériel compatible.
+- Lorsqu'une source BÊTA est sélectionnée, l'interface indique clairement qu'elle est encore en création et peut comporter des problèmes.
+- Les appareils OpenRGB sont réellement détectés, leurs LED sont sélectionnables et leurs couleurs peuvent alimenter les zones WLED.
+- Chaque backend reste isolé : une panne OpenRGB ne doit pas bloquer iCUE, WLED, l'activité PC ou le bouton Arrêter.
+- Les retours intégrés servent à valider progressivement les marques et modèles réels.
+
+IMPORTANT
+- Pour une source BÊTA, installez/démarrez OpenRGB et activez son serveur SDK local (port 6742).
+- Raptor Link ne prétend pas encore lire directement l'animation interne des logiciels Mystic Light/RGB Fusion/Aura eux-mêmes : il utilise OpenRGB comme passerelle vers le matériel compatible.
+
+
+VERSION 0.3.8 — MSI Mystic Light natif, sans OpenRGB
+- Corsair iCUE reste TESTÉ & VALIDÉ.
+- MSI Mystic Light dispose maintenant d'un connecteur natif BÊTA utilisant le SDK officiel MSI, sans passer par OpenRGB.
+- Le SDK MSI propriétaire n'est pas redistribué dans Raptor Link : un bouton permet de télécharger le kit directement depuis le site officiel MSI et d'en extraire la DLL x64 dans les données locales de Raptor Link.
+- MSI Center avec le module Mystic Light doit être installé. Suivant la machine, il peut être nécessaire de lancer Raptor Link en administrateur.
+- Les appareils et zones MSI exposés par le SDK sont détectés, leurs couleurs sont lues et peuvent alimenter les zones WLED.
+- Le pont MSI fonctionne dans un processus séparé avec watchdog pour éviter qu'un blocage du SDK MSI ne fige Raptor Link.
+- Certaines animations dynamiques Mystic Light peuvent ne pas exposer une trame RGB instantanée complète via le SDK public. La fonction reste donc BÊTA et les retours utilisateur sont importants.
+- Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB et SteelSeries GG / Prism restent BÊTA via OpenRGB dans cette version.
+
+
+VERSION 0.3.9 — Diagnostic MSI Mystic Light
+- Corrige le texte erroné « Choisissez un appareil iCUE » lorsqu'une zone utilise MSI Mystic Light.
+- Ajoute un diagnostic MSI détaillé directement dans Sources RGB.
+- Le diagnostic affiche la présence de la DLL, MLAPI_Initialize, MLAPI_GetDeviceInfo, les types retournés, les nombres de LED, le nombre d'appareils créés par Raptor Link et la dernière erreur.
+- Cette version sert à identifier précisément pourquoi certaines cartes mères MSI visibles dans MSI Center ne remontent pas via le SDK public Mystic Light.
+- Le connecteur MSI reste BÊTA NATIVE · SANS OPENRGB.
+
+
+VERSION 0.3.10 — Pont MSI natif C++
+- Remplace l'appel direct au SDK MSI depuis Python par un petit pont Windows C++ natif.
+- Le pont initialise COM puis charge MysticLight_SDK_x64.dll et appelle MLAPI_Initialize/MLAPI_GetDeviceInfo avec les types natifs attendus par MSI.
+- Le pont reste isolé dans un processus séparé et surveillé par Raptor Link.
+- En cas d'exception native, le processus principal Raptor Link reste vivant et le diagnostic affiche le code de sortie.
+- MSI Mystic Light reste BÊTA NATIVE · SANS OPENRGB.
+- Le diagnostic MSI détaillé de la 0.3.9 est conservé.
+
+
+VERSION 0.3.11 — Diagnostic MSI natif par étape
+- Corrige l'erreur Accès refusé lors de la réinstallation du SDK MSI en arrêtant proprement le pont MSI avant de remplacer la DLL.
+- Le pont C++ ne lance plus automatiquement une détection complète avant de répondre.
+- Un journal d'étape local indique désormais exactement où le pont natif s'interrompt : chargement DLL, initialisation MSI, GetDeviceInfo, GetLedInfo ou GetLedColor.
+- Le diagnostic MSI de l'interface affiche la dernière étape atteinte et son code.
+- Le pont MSI est compilé avec le runtime C++ statique pour réduire les dépendances externes.
+
+
+VERSION 0.3.13 — Retour à l'expérience Raptor Link classique
+- L'interface normale est de nouveau centrée sur Corsair iCUE et les sources générées directement par Raptor Link : écran, audio, arc-en-ciel, respiration, comète et couleur fixe.
+- Corsair iCUE reste l'intégration matérielle tierce TESTÉE & VALIDÉE.
+- Mystic Light, OpenRGB, RGB Fusion, Aura, Razer, Logitech et SteelSeries sont masqués par défaut.
+- Pour les retrouver : Réglages > Réglages avancés > laboratoire RGB > Activer les sources RGB expérimentales.
+- Ces fonctions sont clairement indiquées comme limitées, compliquées et non finalisées.
+- Quand le laboratoire RGB est désactivé, les processus MSI/OpenRGB ne sont pas lancés.
+- Les anciennes associations expérimentales ne sont pas supprimées ; elles restent masquées/désactivées jusqu'à réactivation du laboratoire.
+- Le centre Aide & retours est conservé : questions, commentaires, bugs et suggestions.
+- La demande facultative de note après environ une heure reste présente et n'est demandée qu'une fois après validation.
+- La vérification des nouvelles versions au démarrage reste disponible.

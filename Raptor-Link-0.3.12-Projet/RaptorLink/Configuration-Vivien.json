@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "settings": {
+    "idle_seconds": 300,
+    "fps": 25,
+    "lock_off": true,
+    "auto_sync": false,
+    "startup": false,
+    "language": "fr"
+  },
+  "targets": [
+    {
+      "name": "Tour du bureau",
+      "ip": "192.168.1.175",
+      "count": 257,
+      "port": 21324,
+      "enabled": true,
+      "brightness": 100,
+      "idle_seconds": null,
+      "on_stop": "off",
+      "preset": 1,
+      "routes": [
+        {
+          "device": "",
+          "ids": [],
+          "starter_source": "edge",
+          "start": 1,
+          "end": 257,
+          "mapping": "stretch",
+          "reverse": false
+        }
+      ]
+    },
+    {
+      "name": "Logo",
+      "ip": "192.168.1.80",
+      "count": 160,
+      "port": 21324,
+      "enabled": true,
+      "brightness": 100,
+      "idle_seconds": null,
+      "on_stop": "off",
+      "preset": 1,
+      "routes": [
+        {
+          "device": "",
+          "ids": [],
+          "starter_source": "number_row",
+          "start": 1,
+          "end": 160,
+          "mapping": "stretch",
+          "reverse": false
+        }
+      ]
+    }
+  ]
+}
