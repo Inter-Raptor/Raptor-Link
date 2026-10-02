@@ -14,6 +14,27 @@ using GetDeviceInfoFn = int (__cdecl*)(SAFEARRAY**, SAFEARRAY**);
 using GetLedInfoFn = int (__cdecl*)(BSTR, DWORD, BSTR*, SAFEARRAY**);
 using GetLedColorFn = int (__cdecl*)(BSTR, DWORD, DWORD*, DWORD*, DWORD*);
 
+static int call_init(InitializeFn fn,DWORD* seh){
+    *seh=0;int code=999999;
+    __try{code=fn();}__except(*seh=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){code=999998;}
+    return code;
+}
+static int call_info(GetDeviceInfoFn fn,SAFEARRAY** a,SAFEARRAY** b,DWORD* seh){
+    *seh=0;int code=999999;
+    __try{code=fn(a,b);}__except(*seh=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){code=999998;}
+    return code;
+}
+static int call_ledinfo(GetLedInfoFn fn,BSTR type,DWORD idx,BSTR* led,SAFEARRAY** styles,DWORD* seh){
+    *seh=0;int code=999999;
+    __try{code=fn(type,idx,led,styles);}__except(*seh=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){code=999998;}
+    return code;
+}
+static int call_color(GetLedColorFn fn,BSTR type,DWORD idx,DWORD* r,DWORD* g,DWORD* b,DWORD* seh){
+    *seh=0;int code=999999;
+    __try{code=fn(type,idx,r,g,b);}__except(*seh=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){code=999998;}
+    return code;
+}
+
 static std::string utf8(const std::wstring& w){
     if(w.empty()) return {};
     int n=WideCharToMultiByte(CP_UTF8,0,w.data(),(int)w.size(),nullptr,0,nullptr,nullptr);
@@ -79,9 +100,7 @@ int wmain(int argc,wchar_t** argv){
         std::cout<<"{\"ok\":false,\"fatal\":true,\"diagnostic\":{\"native_helper\":true,\"exports_ok\":false},\"error\":\"Fonctions MSI SDK manquantes\"}\n"<<std::flush;
         FreeLibrary(mod); if(SUCCEEDED(co)) CoUninitialize(); return 4;
     }
-    int initCode=999999; DWORD sehCode=0;
-    __try{initCode=init();}
-    __except(sehCode=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){initCode=999998;}
+    DWORD sehCode=0; int initCode=call_init(init,&sehCode);
     if(sehCode){
         std::cout<<"{\"ok\":false,\"fatal\":true,\"diagnostic\":{\"native_helper\":true,\"initialize_exception\":"<<sehCode<<"},\"error\":\"Exception native pendant MLAPI_Initialize\"}\n"<<std::flush;
         FreeLibrary(mod); if(SUCCEEDED(co)) CoUninitialize(); return 5;
@@ -94,8 +113,7 @@ int wmain(int argc,wchar_t** argv){
     std::vector<Device> devices;
     auto scan=[&](int& infoCode,DWORD& infoSeh)->bool{
         SAFEARRAY* types=nullptr;SAFEARRAY* counts=nullptr;infoCode=999999;infoSeh=0;
-        __try{infoCode=getInfo(&types,&counts);}
-        __except(infoSeh=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){infoCode=999998;}
+        infoCode=call_info(getInfo,&types,&counts,&infoSeh);
         if(infoSeh||infoCode!=0){if(types)SafeArrayDestroy(types);if(counts)SafeArrayDestroy(counts);return false;}
         auto names=arrayStrings(types);auto nums=arrayStrings(counts);
         if(types)SafeArrayDestroy(types);if(counts)SafeArrayDestroy(counts);
@@ -107,9 +125,8 @@ int wmain(int argc,wchar_t** argv){
             Device d;d.type=names[di];d.leds=count;d.ledNames.resize(count);
             BSTR type=SysAllocStringLen(d.type.data(),(UINT)d.type.size());
             for(int li=0;li<count;li++){
-                BSTR led=nullptr;SAFEARRAY* styles=nullptr;int c=-999;DWORD ex=0;
-                __try{c=getLedInfo(type,(DWORD)li,&led,&styles);}
-                __except(ex=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){c=-998;}
+                BSTR led=nullptr;SAFEARRAY* styles=nullptr;DWORD ex=0;
+                int c=call_ledinfo(getLedInfo,type,(DWORD)li,&led,&styles,&ex);
                 if(c==0&&led)d.ledNames[li]=std::wstring(led,SysStringLen(led));
                 else d.ledNames[li]=L"LED "+std::to_wstring(li+1);
                 if(led)SysFreeString(led);if(styles)SafeArrayDestroy(styles);
@@ -140,9 +157,8 @@ int wmain(int argc,wchar_t** argv){
             BSTR type=SysAllocStringLen(d.type.data(),(UINT)d.type.size());
             for(int li=0;li<d.leds;li++){
                 if(li)out<<",";
-                DWORD r=0,g=0,b=0;int cc=-999;DWORD ex=0;
-                __try{cc=getColor(type,(DWORD)li,&r,&g,&b);}
-                __except(ex=GetExceptionCode(),EXCEPTION_EXECUTE_HANDLER){cc=-998;}
+                DWORD r=0,g=0,b=0,ex=0;
+                int cc=call_color(getColor,type,(DWORD)li,&r,&g,&b,&ex);
                 out<<"\""<<li<<"\":["<<(cc==0?std::min<DWORD>(255,r):0)<<","<<(cc==0?std::min<DWORD>(255,g):0)<<","<<(cc==0?std::min<DWORD>(255,b):0)<<"]";
             }
             SysFreeString(type);out<<"}";
