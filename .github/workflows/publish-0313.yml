@@ -1,0 +1,106 @@
+name: Publish Raptor Link v0.3.13
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.repository == 'Inter-Raptor/Raptor-Link'
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Raptor-Link-0.3.4-Projet
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build native MSI helper
+        shell: cmd
+        run: |
+          if not exist RaptorLink\native mkdir RaptorLink\native
+          cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /Fe:RaptorLink\native\msi_bridge.exe RaptorLink\native\msi_bridge.cpp ole32.lib oleaut32.lib
+          if not exist RaptorLink\native\msi_bridge.exe exit /b 1
+
+      - name: Run regression tests
+        shell: powershell
+        run: |
+          & ".\RaptorLink\runtime\python.exe" -m unittest discover -s raptor-build -p "test_*.py"
+          & ".\RaptorLink\runtime\python.exe" -m py_compile ".\RaptorLink\app.py" ".\RaptorLink\engine.py" ".\RaptorLink\support.py" ".\RaptorLink\icue_worker.py" ".\RaptorLink\openrgb_source.py" ".\RaptorLink\msi_sdk.py" ".\RaptorLink\msi_source.py" ".\RaptorLink\msi_worker.py"
+          node --check ".\RaptorLink\web\ui.js"
+          node --check ".\RaptorLink\web\extras.js"
+
+      - name: Install NSIS
+        shell: powershell
+        run: choco install nsis -y --no-progress
+
+      - name: Build installer
+        shell: powershell
+        run: |
+          Remove-Item ".\raptor-build\payload" -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item ".\RaptorLink" ".\raptor-build\payload" -Recurse
+          Push-Location ".\raptor-build"
+          & "C:\Program Files (x86)\NSIS\makensis.exe" "/DAPPDIR=payload" "/DOUTPUT=..\Raptor-Link-Setup-0.3.13.exe" ".\installer.nsi"
+          Pop-Location
+          Remove-Item ".\raptor-build\payload" -Recurse -Force -ErrorAction SilentlyContinue
+          if (!(Test-Path ".\Raptor-Link-Setup-0.3.13.exe")) { throw "Installer was not generated" }
+
+      - name: Build project ZIP
+        shell: powershell
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "Raptor-Link-0.3.13-Projet"
+          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item ".\RaptorLink" (Join-Path $stage "RaptorLink") -Recurse
+          Copy-Item ".\raptor-build" (Join-Path $stage "raptor-build") -Recurse
+          Get-ChildItem $stage -Directory -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force
+          $zip = Join-Path (Get-Location) "Raptor-Link-0.3.13-Projet.zip"
+          Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal -Force
+          if (!(Test-Path $zip)) { throw "Project ZIP was not generated" }
+
+      - name: Prepare release notes
+        shell: powershell
+        run: |
+          @'
+          ## Raptor Link v0.3.13 Beta
+
+          Cette version recentre l'expérience normale sur **Corsair iCUE** et les sources directes de **Raptor Link**.
+
+          ### Principales évolutions
+          - iCUE reste l'intégration RGB tierce **TESTÉE & VALIDÉE**.
+          - Sources directes Raptor Link : écran, audio, arc-en-ciel, respiration, comète et couleur fixe.
+          - Mystic Light, OpenRGB et les autres marques sont conservés dans **Réglages > Réglages avancés > laboratoire RGB**.
+          - Ces connecteurs expérimentaux sont désactivés par défaut et clairement indiqués comme limités / non finalisés.
+          - Le watchdog iCUE reste inclus pour éviter qu'un blocage du SDK ne fige Raptor Link.
+          - Centre **Aide & retours** conservé : questions, bugs, idées, commentaires et tests matériels.
+          - Demande facultative de note 1–5 après environ une heure d'utilisation cumulée.
+          - Vérification des mises à jour au démarrage.
+          - Projet complet fourni pour permettre à chacun d'étudier, modifier et reconstruire Raptor Link.
+
+          ### Fichiers
+          - `Raptor-Link-Setup-0.3.13.exe` : installateur Windows.
+          - `Raptor-Link-0.3.13-Projet.zip` : projet complet.
+
+          > Projet indépendant sous licence MIT. Raptor Link n'est ni affilié, ni sponsorisé, ni approuvé par Corsair, WLED, MSI ou les autres marques citées.
+          '@ | Set-Content -Encoding UTF8 ".\release-notes-0.3.13.md"
+
+      - name: Publish GitHub Release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (gh release view "v0.3.13" --repo "${{ github.repository }}" *> $null) {
+            gh release upload "v0.3.13" ".\Raptor-Link-Setup-0.3.13.exe" ".\Raptor-Link-0.3.13-Projet.zip" --repo "${{ github.repository }}" --clobber
+          } else {
+            gh release create "v0.3.13" ".\Raptor-Link-Setup-0.3.13.exe" ".\Raptor-Link-0.3.13-Projet.zip" --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Raptor Link v0.3.13 Beta" --notes-file ".\release-notes-0.3.13.md"
+          }
