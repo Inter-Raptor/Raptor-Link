@@ -105,7 +105,7 @@ def render_target(target,colors):
     gain=target['brightness']/100
     return [tuple(round(v*gain) for v in c) for c in pixels]
 
-def packets(pixels,timeout=2):
+def packets(pixels,timeout=5):
     if len(pixels)<=490:
         return [bytes([2,timeout])+bytes(v for c in pixels for v in c)]
     output=[]
@@ -119,8 +119,10 @@ def probe_target(t,initialize=False,demo=False):
     info=http(t['ip'],'/json/info')
     if info.get('leds',{}).get('count')!=t['count']:raise ValueError('Nombre de LED différent : utilisez Vérifier.')
     if not initialize:return None
+    # Capture the state for a later restore, but never switch WLED off while
+    # probing. At Windows startup the network can be late and repeated probes
+    # must remain read-only or the strip visibly blinks.
     st=http(t['ip'],'/json/state')
-    http(t['ip'],'/json/state',{'on':False,'transition':0})
     return {k:st[k] for k in ['on','bri','transition','mainseg','seg'] if k in st}
 
 class GenericCue(Cue):
@@ -492,23 +494,29 @@ class Engine:
                                 try:
                                     original=pending.pop(ip).result()
                                     if original is not None and ip not in self.original:self.original[ip]=original
-                                    if health.get(ip)!='ok':self.fades[ip]=Fade()
                                     health[ip]='ok'
+                                    next_probe[ip]=start+30
                                 except Exception as e:
                                     msg=str(e)
                                     if health.get(ip)!=msg:self.log(t['name']+' : '+msg)
                                     health[ip]=msg
-                                next_probe[ip]=start+8
-                            if ip not in pending and start>=next_probe.get(ip,0):pending[ip]=pool.submit(probe_target,t,health.get(ip)!='ok',self.demo)
-                            if health.get(ip)!='ok':
-                                states[ip]='Reconnexion…' if ip not in health else health[ip];continue
+                                    # Startup Wi-Fi/WLED availability can lag behind Windows.
+                                    # Retry quickly, but do not stop the realtime UDP stream.
+                                    next_probe[ip]=start+2
+                            if ip not in pending and start>=next_probe.get(ip,0):
+                                pending[ip]=pool.submit(probe_target,t,ip not in self.original,self.demo)
+                            http_issue=health.get(ip)
                             errors=[]
+                            source_missing=False
                             for i,r in enumerate(t['routes']):
                                 if r['source'] in ('msi','openrgb') and not experimental:
                                     errors.append('Association '+str(i+1)+' : source RGB expérimentale désactivée')
                                 elif r['source'] in ('icue','msi','openrgb') and (not r['ids'] or any(x not in colors.get(r['device'],{}) for x in r['ids'])):
                                     errors.append('Association '+str(i+1)+' : appareil ou LED indisponibles')
-                            if not self.demo and on_screen_missing(t,self.capture):errors.append('Écran indisponible : vérifiez la sélection dans la zone')
+                                    source_missing=True
+                            if not self.demo and on_screen_missing(t,self.capture):
+                                errors.append('Écran indisponible : vérifiez la sélection dans la zone')
+                                source_missing=True
                             if not t['routes']:errors.append('Ajoutez une association')
                             due=due_alarm(t,now,self.alarm_seen)
                             if due is not None:
@@ -519,10 +527,24 @@ class Engine:
                             end,alarm=self.alarms.get(ip,(0,None))
                             alarm_on=start<end
                             on,label=gate(t,self.run_settings,now,self.idle,self.is_locked,self.keep_awake,alarm_on)
-                            frame=render(t,colors,start,self.capture.screen,self.capture.level,self.history,dt)
+                            testing=start<self.tests.get(ip,0) and on
+                            # Do not replace the current WLED effect with black while iCUE,
+                            # screen capture or another source is still starting. Once we
+                            # have a valid frame, keep the last one during a short source
+                            # interruption instead of making the strip blink.
+                            if source_missing and on and not alarm_on and not testing:
+                                if ip not in self.frames:
+                                    states[ip]='En attente de la source…'
+                                    if http_issue and http_issue!='ok':states[ip]+=' · API WLED en attente'
+                                    frames[ip]=[]
+                                    continue
+                                frame=copy.deepcopy(self.frames[ip])
+                                label='Source en reconnexion'
+                            else:
+                                frame=render(t,colors,start,self.capture.screen,self.capture.level,self.history,dt)
                             if alarm_on and on:
                                 frame=effect(alarm['effect'],t['count'],start-(end-alarm['duration']));frame=[tuple(round(c*t['brightness']/100) for c in x) for x in frame];label='Réveil : '+alarm['name']
-                            if start<self.tests.get(ip,0) and on:
+                            if testing:
                                 frame=[(100,100,100) if int(start*4)%2 else (0,0,0)]*t['count'];label='Identification'
                             fade=self.fades.setdefault(ip,Fade())
                             # Hard time boundary; presence and manual transitions may fade.
@@ -536,6 +558,8 @@ class Engine:
                                     for packet in packets(frame):self.udp.sendto(packet,(ip,t['port']))
                                 except OSError as e:health[ip]=str(e);next_probe[ip]=0
                             states[ip]=('; '.join(errors) if errors and on and not alarm_on else label)
+                            if http_issue and http_issue!='ok':
+                                states[ip]+=' · API WLED en attente (UDP actif)'
                             if ip==self.plan_ip:self.plan_frame=frame
                             frames[ip]=frame[::max(1,len(frame)//200)]
                     self.target_status=states;self.previews=frames
