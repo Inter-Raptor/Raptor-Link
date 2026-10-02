@@ -68,8 +68,11 @@ class MysticLightSDK:
         self.ole=_Ole()
         # MSI's published header uses ordinary C function pointers (cdecl).
         self.dll=C.CDLL(str(self.path))
+        self.last_diag={"dll_path":str(self.path),"dll_loaded":True,"initialize_code":None,"device_info_code":None,"raw_device_types":[],"raw_led_counts":[],"devices":[]}
         self._bind()
-        self._check(self.dll.MLAPI_Initialize(),"Initialisation Mystic Light")
+        init_code=int(self.dll.MLAPI_Initialize())
+        self.last_diag["initialize_code"]=init_code
+        self._check(init_code,"Initialisation Mystic Light")
         self.devices=self.scan()
 
     def _bind(self):
@@ -88,9 +91,13 @@ class MysticLightSDK:
 
     def scan(self):
         types=C.c_void_p();counts=C.c_void_p()
-        self._check(self.dll.MLAPI_GetDeviceInfo(C.byref(types),C.byref(counts)),"Détection des appareils MSI")
+        code=int(self.dll.MLAPI_GetDeviceInfo(C.byref(types),C.byref(counts)))
+        self.last_diag["device_info_code"]=code
+        self._check(code,"Détection des appareils MSI")
         names=self.ole.strings(types.value)
         led_counts=self.ole.strings(counts.value)
+        self.last_diag["raw_device_types"]=list(names)
+        self.last_diag["raw_led_counts"]=list(led_counts)
         out=[]
         for device_index,(name,count_text) in enumerate(zip(names,led_counts)):
             try:count=int(str(count_text).strip())
@@ -115,6 +122,8 @@ class MysticLightSDK:
             out.append({"id":"msi:"+stable,"provider":"msi","model":name,"name":name,"serial":"","type":0,
                         "positions":positions,"native_name":name})
         self.devices=out
+        self.last_diag["devices"]=[{"model":d["model"],"leds":len(d["positions"])} for d in out]
+        self.last_diag["device_count"]=len(out)
         return out
 
     def read_device(self,device):
@@ -131,3 +140,7 @@ class MysticLightSDK:
                     raise MysticLightError(code,f"Lecture MSI {name} LED {p['id']}")
             return colors
         finally:self.ole.free(bstr)
+
+
+    def diagnostic(self):
+        return dict(self.last_diag)
