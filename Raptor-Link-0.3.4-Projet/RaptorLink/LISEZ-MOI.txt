@@ -1,8 +1,8 @@
-RAPTOR LINK 0.3.4 BÊTA — Un projet de Vivien Jardot
+RAPTOR LINK 0.3.5 BÊTA — Un projet de Vivien Jardot
 
 INSTALLATION WINDOWS 64 BITS
 1. Dans l'ancienne application, utilisez Quitter près de l'horloge (pas seulement la croix).
-2. Lancez Raptor-Link-Setup-0.3.4.exe et choisissez le dossier.
+2. Lancez Raptor-Link-Setup-0.3.5.exe et choisissez le dossier.
 3. Ouvrez Raptor Link. Vos réglages Aurora sont repris automatiquement sur le même compte Windows.
 4. Enregistrez puis Démarrez. iCUE doit autoriser pythonw.exe dans ses réglages SDK pour les sources iCUE.
 La configuration reste dans %LOCALAPPDATA%\AuroraWLED pour assurer la migration.
@@ -103,3 +103,9 @@ Pour une source iCUE normale ou un effet autonome, le plan montre la forme du ru
 VALIDATION 0.3.4
 Tests automatisés : migrations, plusieurs réveils et priorités, durée du fondu et changement pendant transition, positions et quantités des LED, capture composite simulée avec coordonnées négatives et disposition personnalisée, navigation/enregistrement/réouverture de l’interface.
 La mise au premier plan et la capture réelle multi-écran doivent être vérifiées sur Windows ; cet environnement de construction ne possède pas votre matériel.
+
+
+VERSION 0.3.5 — Correctif de robustesse iCUE
+- Le SDK Corsair est isolé dans un processus séparé.
+- Un watchdog redémarre automatiquement le pont iCUE s'il ne répond plus.
+- Un blocage iCUE ne doit plus figer l'activité PC, les WLED ni le bouton Arrêter.
