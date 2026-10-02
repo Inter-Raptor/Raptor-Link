@@ -23,6 +23,7 @@ def extras(cfg,raw):
     s['audio_output']=str(s.get('audio_output','default'))[:512]
     s['tutorial']=s.get('tutorial','ask') if s.get('tutorial','ask') in ['ask','never','done'] else 'ask'
     s['logo_animation']=bool(s.get('logo_animation',True))
+    s['experimental_rgb']=bool(s.get('experimental_rgb',False))
     for t in cfg['targets']:
         sch=t.setdefault('schedule',{'enabled':False,'start':'08:00','end':'23:00','mode':'active','days':list(range(7))})
         clock(sch.get('start'));clock(sch.get('end'))
