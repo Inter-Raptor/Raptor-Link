@@ -70,6 +70,9 @@ function renderMsiStatus(){
  const lines=[
   'Pont MSI natif C++ : '+(d.native_helper===false?'ABSENT':d.native_helper===true?'ACTIF':'EN ATTENTE'),
   'Code sortie du pont : '+(d.bridge_exit_code??'—'),
+  'Dernière étape native : '+(d.stage||'—'),
+  'Code étape native : '+(d.code??'—'),
+  'Détail étape native : '+(d.detail||'—'),
   'DLL MSI : '+(m.available?'OK':'ABSENTE'),
   'Chemin : '+(m.path||'—'),
   'MLAPI_Initialize : '+(d.initialize_code===0?'OK (0)':d.initialize_code??'—'),
