@@ -1,0 +1,74 @@
+name: Build Raptor Link 0.3.6 beta
+
+on:
+  push:
+    branches:
+      - release/0.3.6-beta
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Raptor-Link-0.3.4-Projet
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Python regression tests
+        shell: powershell
+        run: |
+          & ".\RaptorLink\runtime\python.exe" -m unittest discover -s raptor-build -p "test_*.py"
+
+      - name: Check Python syntax
+        shell: powershell
+        run: |
+          & ".\RaptorLink\runtime\python.exe" -m py_compile ".\RaptorLink\app.py" ".\RaptorLink\engine.py" ".\RaptorLink\support.py" ".\RaptorLink\icue_worker.py"
+
+      - name: Check JavaScript syntax
+        shell: powershell
+        run: |
+          node --check ".\RaptorLink\web\ui.js"
+          node --check ".\RaptorLink\web\extras.js"
+
+      - name: Install NSIS
+        shell: powershell
+        run: choco install nsis -y --no-progress
+
+      - name: Build installer
+        shell: powershell
+        run: |
+          Remove-Item ".\raptor-build\payload" -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item ".\RaptorLink" ".\raptor-build\payload" -Recurse
+          Push-Location ".\raptor-build"
+          & "C:\Program Files (x86)\NSIS\makensis.exe" "/DAPPDIR=payload" "/DOUTPUT=..\Raptor-Link-Setup-0.3.6.exe" ".\installer.nsi"
+          Pop-Location
+          Remove-Item ".\raptor-build\payload" -Recurse -Force -ErrorAction SilentlyContinue
+          if (!(Test-Path ".\Raptor-Link-Setup-0.3.6.exe")) { throw "Installer was not generated" }
+
+      - name: Build complete project ZIP
+        shell: powershell
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "Raptor-Link-0.3.6-Projet"
+          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item ".\RaptorLink" (Join-Path $stage "RaptorLink") -Recurse
+          Copy-Item ".\raptor-build" (Join-Path $stage "raptor-build") -Recurse
+          $zip = Join-Path (Get-Location) "Raptor-Link-0.3.6-Projet.zip"
+          Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal -Force
+          if (!(Test-Path $zip)) { throw "Project ZIP was not generated" }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Raptor-Link-Setup-0.3.6
+          path: Raptor-Link-0.3.4-Projet/Raptor-Link-Setup-0.3.6.exe
+          if-no-files-found: error
+
+      - name: Upload complete project
+        uses: actions/upload-artifact@v4
+        with:
+          name: Raptor-Link-0.3.6-Projet
+          path: Raptor-Link-0.3.4-Projet/Raptor-Link-0.3.6-Projet.zip
+          if-no-files-found: error
