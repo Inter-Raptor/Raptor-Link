@@ -1,8 +1,8 @@
-RAPTOR LINK 0.3.9 DIAGNOSTIC BÊTA — Un projet de Vivien Jardot
+RAPTOR LINK 0.3.10 BÊTA — Un projet de Vivien Jardot
 
 INSTALLATION WINDOWS 64 BITS
 1. Dans l'ancienne application, utilisez Quitter près de l'horloge (pas seulement la croix).
-2. Lancez Raptor-Link-Setup-0.3.9.exe et choisissez le dossier.
+2. Lancez Raptor-Link-Setup-0.3.10.exe et choisissez le dossier.
 3. Ouvrez Raptor Link. Vos réglages Aurora sont repris automatiquement sur le même compte Windows.
 4. Enregistrez puis Démarrez. iCUE doit autoriser pythonw.exe dans ses réglages SDK pour les sources iCUE.
 La configuration reste dans %LOCALAPPDATA%\AuroraWLED pour assurer la migration.
@@ -152,3 +152,12 @@ VERSION 0.3.9 — Diagnostic MSI Mystic Light
 - Le diagnostic affiche la présence de la DLL, MLAPI_Initialize, MLAPI_GetDeviceInfo, les types retournés, les nombres de LED, le nombre d'appareils créés par Raptor Link et la dernière erreur.
 - Cette version sert à identifier précisément pourquoi certaines cartes mères MSI visibles dans MSI Center ne remontent pas via le SDK public Mystic Light.
 - Le connecteur MSI reste BÊTA NATIVE · SANS OPENRGB.
+
+
+VERSION 0.3.10 — Pont MSI natif C++
+- Remplace l'appel direct au SDK MSI depuis Python par un petit pont Windows C++ natif.
+- Le pont initialise COM puis charge MysticLight_SDK_x64.dll et appelle MLAPI_Initialize/MLAPI_GetDeviceInfo avec les types natifs attendus par MSI.
+- Le pont reste isolé dans un processus séparé et surveillé par Raptor Link.
+- En cas d'exception native, le processus principal Raptor Link reste vivant et le diagnostic affiche le code de sortie.
+- MSI Mystic Light reste BÊTA NATIVE · SANS OPENRGB.
+- Le diagnostic MSI détaillé de la 0.3.9 est conservé.
