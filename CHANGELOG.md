@@ -4,6 +4,16 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.3.14 Beta
+
+- Fixed slow and unstable synchronization immediately after Windows startup.
+- WLED health probes are now strictly read-only: Raptor Link no longer switches a strip off while checking its HTTP API.
+- Realtime UDP output no longer waits for the WLED HTTP API to answer; colors can start as soon as the controller accepts UDP.
+- Failed startup probes retry quickly in the background without interrupting an already running realtime stream.
+- Raptor Link now waits for iCUE/screen source data before replacing the current WLED effect with black.
+- During a short source interruption, the last valid frame is kept instead of flashing black.
+- Increased the WLED realtime hold timeout from 2 s to 5 s to tolerate short Windows/iCUE/network stalls without visible blinking.
+
 ## 0.3.13 Beta
 
 - Restored the classic Raptor Link experience: the normal UI is again centered on **Corsair iCUE** and Raptor Link's own direct sources (screen, audio and local effects).
