@@ -1,8 +1,8 @@
-RAPTOR LINK 0.3.7 BÊTA — Un projet de Vivien Jardot
+RAPTOR LINK 0.3.8 BÊTA — Un projet de Vivien Jardot
 
 INSTALLATION WINDOWS 64 BITS
 1. Dans l'ancienne application, utilisez Quitter près de l'horloge (pas seulement la croix).
-2. Lancez Raptor-Link-Setup-0.3.7.exe et choisissez le dossier.
+2. Lancez Raptor-Link-Setup-0.3.8.exe et choisissez le dossier.
 3. Ouvrez Raptor Link. Vos réglages Aurora sont repris automatiquement sur le même compte Windows.
 4. Enregistrez puis Démarrez. iCUE doit autoriser pythonw.exe dans ses réglages SDK pour les sources iCUE.
 La configuration reste dans %LOCALAPPDATA%\AuroraWLED pour assurer la migration.
@@ -133,3 +133,14 @@ VERSION 0.3.7 — Sources RGB multi-marques utilisables en Bêta
 IMPORTANT
 - Pour une source BÊTA, installez/démarrez OpenRGB et activez son serveur SDK local (port 6742).
 - Raptor Link ne prétend pas encore lire directement l'animation interne des logiciels Mystic Light/RGB Fusion/Aura eux-mêmes : il utilise OpenRGB comme passerelle vers le matériel compatible.
+
+
+VERSION 0.3.8 — MSI Mystic Light natif, sans OpenRGB
+- Corsair iCUE reste TESTÉ & VALIDÉ.
+- MSI Mystic Light dispose maintenant d'un connecteur natif BÊTA utilisant le SDK officiel MSI, sans passer par OpenRGB.
+- Le SDK MSI propriétaire n'est pas redistribué dans Raptor Link : un bouton permet de télécharger le kit directement depuis le site officiel MSI et d'en extraire la DLL x64 dans les données locales de Raptor Link.
+- MSI Center avec le module Mystic Light doit être installé. Suivant la machine, il peut être nécessaire de lancer Raptor Link en administrateur.
+- Les appareils et zones MSI exposés par le SDK sont détectés, leurs couleurs sont lues et peuvent alimenter les zones WLED.
+- Le pont MSI fonctionne dans un processus séparé avec watchdog pour éviter qu'un blocage du SDK MSI ne fige Raptor Link.
+- Certaines animations dynamiques Mystic Light peuvent ne pas exposer une trame RGB instantanée complète via le SDK public. La fonction reste donc BÊTA et les retours utilisateur sont importants.
+- Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB et SteelSeries GG / Prism restent BÊTA via OpenRGB dans cette version.
