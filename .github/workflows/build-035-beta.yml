@@ -28,7 +28,9 @@ jobs:
       - name: Build installer
         shell: powershell
         run: |
-          & "C:\Program Files (x86)\NSIS\makensis.exe" ".\raptor-build\installer.nsi"
+          Push-Location ".\raptor-build"
+          & "C:\Program Files (x86)\NSIS\makensis.exe" ".\installer.nsi"
+          Pop-Location
           if (!(Test-Path ".\Raptor-Link-Setup-0.3.5.exe")) { throw "Installer was not generated" }
 
       - name: Upload installer
