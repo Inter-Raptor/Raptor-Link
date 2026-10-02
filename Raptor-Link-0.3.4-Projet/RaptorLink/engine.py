@@ -305,8 +305,14 @@ class Engine:
         return base
 
     def install_msi_sdk(self):
-        path=install_official_sdk(self.path.parent)
-        if self.msi:self.msi.refresh_sdk()
+        if self.msi:
+            self.msi.close()
+            self.msi=None
+            time.sleep(.15)
+        try:
+            path=install_official_sdk(self.path.parent)
+        finally:
+            if not self.demo and self.msi is None:self.msi=MsiWorker(self.log,self.path.parent)
         self.scan_requested=True
         self.log('SDK MSI Mystic Light officiel installé pour Raptor Link : '+str(path))
         return self.msi_status()
