@@ -11,18 +11,18 @@ from support import Engagement, issue_url, version_tuple
 
 class Support(unittest.TestCase):
     def test_version_parser(self):
-        self.assertEqual(version_tuple('v0.3.12'), (0,3,12))
+        self.assertEqual(version_tuple('v0.3.13'), (0,3,13))
         self.assertEqual(version_tuple('0.4.0-beta'), (0,4,0))
         self.assertIsNone(version_tuple('latest'))
 
     def test_feedback_url_is_prefilled(self):
-        url=issue_url('compatibility','Mystic Light','Test message',5,{'raptor_link':'0.3.12'},'MSI Mystic Light')
+        url=issue_url('compatibility','Mystic Light','Test message',5,{'raptor_link':'0.3.13'},'MSI Mystic Light')
         self.assertEqual(urlparse(url).netloc,'github.com')
         q=parse_qs(urlparse(url).query)
         self.assertIn('[Compatibility]',q['title'][0])
         self.assertIn('MSI Mystic Light',q['body'][0])
         self.assertIn('5/5',q['body'][0])
-        self.assertIn('0.3.12',q['body'][0])
+        self.assertIn('0.3.13',q['body'][0])
 
     def test_rating_is_only_due_once(self):
         with tempfile.TemporaryDirectory() as tmp:
