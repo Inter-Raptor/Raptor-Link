@@ -4,6 +4,13 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.3.12 Beta
+
+- MSI native helper now waits 1.5 seconds after MLAPI_Initialize before MLAPI_GetDeviceInfo.
+- MLAPI_GetDeviceInfo is retried up to five times when it returns an error instead of crashing.
+- The helper now runs with the MSI SDK directory as its working directory.
+- This specifically targets systems where MLAPI_Initialize succeeds but MSI's DLL terminates during immediate device enumeration.
+
 ## 0.3.11 Beta
 
 - Added persistent stage-by-stage diagnostics around the native MSI SDK calls.
