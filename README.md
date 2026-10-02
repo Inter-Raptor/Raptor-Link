@@ -4,7 +4,7 @@
 
 ### Bring WLED into your PC RGB ecosystem.
 
-**WLED + Corsair iCUE + screen ambience + presets + automation + community feedback — from one Windows app.**
+**WLED + Corsair iCUE + OpenRGB-compatible PC lighting + screen ambience + presets + automation — from one Windows app.**
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://github.com/Inter-Raptor/Raptor-Link)
 [![WLED](https://img.shields.io/badge/WLED-compatible-ffb000)](https://kno.wled.ge/)
@@ -254,11 +254,13 @@ Areas of interest include:
 
 ## 💬 Built-in feedback & hardware testing
 
-Raptor Link 0.3.6 adds an in-app feedback center. Users can prepare questions, bug reports, suggestions, ratings and hardware compatibility reports without exposing a GitHub token inside the application. The final report opens on GitHub pre-filled so the user can review it before submitting.
+Raptor Link 0.3.7 includes the in-app feedback center introduced in 0.3.6. Users can prepare questions, bug reports, suggestions, ratings and hardware compatibility reports without exposing a GitHub token inside the application. The final report opens on GitHub pre-filled so the user can review it before submitting.
 
-The app also lists future RGB ecosystems where community testers are especially useful: MSI Mystic Light, Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB, SteelSeries GG / Prism and OpenRGB.
+Raptor Link 0.3.7 also adds a real **OpenRGB SDK source**. This makes compatible hardware from MSI, Gigabyte, ASUS, Razer, Logitech, SteelSeries and other OpenRGB-supported vendors usable as a color source for WLED.
 
-These ecosystems are **testing targets and are not yet advertised as supported connectors**.
+**Corsair iCUE is the tested and validated integration.** The other ecosystems are clearly marked **Beta / In development** because they have not yet been validated across enough real-world hardware.
+
+For the Beta integrations, OpenRGB must currently be running locally with its SDK server available on port `6742`. Raptor Link reads the devices and LED colors exposed by OpenRGB; it does not yet hook directly into the private animation engines of Mystic Light, RGB Fusion, Aura, G HUB, etc.
 
 ## 🐛 Bugs, ideas and feedback
 
