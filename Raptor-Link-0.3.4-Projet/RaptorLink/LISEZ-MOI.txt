@@ -109,3 +109,13 @@ VERSION 0.3.5 — Correctif de robustesse iCUE
 - Le SDK Corsair est isolé dans un processus séparé.
 - Un watchdog redémarre automatiquement le pont iCUE s'il ne répond plus.
 - Un blocage iCUE ne doit plus figer l'activité PC, les WLED ni le bouton Arrêter.
+
+
+VERSION 0.3.6 — Communauté, mises à jour et retours intégrés
+- Vérification non bloquante des nouvelles Releases GitHub au démarrage.
+- Centre Aide & retours pour préparer questions, bugs, suggestions et commentaires.
+- Demande facultative de note après environ une heure d'utilisation cumulée ; une note validée n'est plus redemandée.
+- Programme communautaire de tests pour MSI Mystic Light, Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB, SteelSeries GG / Prism et OpenRGB.
+- Les diagnostics joints à un retour sont facultatifs et n'incluent pas les adresses IP WLED.
+- Les autres écosystèmes RGB ne sont pas encore annoncés comme compatibles : ils restent en recherche de testeurs.
+- Le correctif de robustesse iCUE/watchdog de la 0.3.5 est inclus.
