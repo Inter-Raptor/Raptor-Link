@@ -169,3 +169,16 @@ VERSION 0.3.11 — Diagnostic MSI natif par étape
 - Un journal d'étape local indique désormais exactement où le pont natif s'interrompt : chargement DLL, initialisation MSI, GetDeviceInfo, GetLedInfo ou GetLedColor.
 - Le diagnostic MSI de l'interface affiche la dernière étape atteinte et son code.
 - Le pont MSI est compilé avec le runtime C++ statique pour réduire les dépendances externes.
+
+
+VERSION 0.3.13 — Retour à l'expérience Raptor Link classique
+- L'interface normale est de nouveau centrée sur Corsair iCUE et les sources générées directement par Raptor Link : écran, audio, arc-en-ciel, respiration, comète et couleur fixe.
+- Corsair iCUE reste l'intégration matérielle tierce TESTÉE & VALIDÉE.
+- Mystic Light, OpenRGB, RGB Fusion, Aura, Razer, Logitech et SteelSeries sont masqués par défaut.
+- Pour les retrouver : Réglages > Réglages avancés > laboratoire RGB > Activer les sources RGB expérimentales.
+- Ces fonctions sont clairement indiquées comme limitées, compliquées et non finalisées.
+- Quand le laboratoire RGB est désactivé, les processus MSI/OpenRGB ne sont pas lancés.
+- Les anciennes associations expérimentales ne sont pas supprimées ; elles restent masquées/désactivées jusqu'à réactivation du laboratoire.
+- Le centre Aide & retours est conservé : questions, commentaires, bugs et suggestions.
+- La demande facultative de note après environ une heure reste présente et n'est demandée qu'une fois après validation.
+- La vérification des nouvelles versions au démarrage reste disponible.
