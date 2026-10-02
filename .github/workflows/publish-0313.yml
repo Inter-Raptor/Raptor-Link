@@ -99,7 +99,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if (gh release view "v0.3.13" --repo "${{ github.repository }}" *> $null) {
+          $ErrorActionPreference = "Continue"
+          gh release view "v0.3.13" --repo "${{ github.repository }}" *> $null
+          $exists = $LASTEXITCODE -eq 0
+          $ErrorActionPreference = "Stop"
+          if ($exists) {
             gh release upload "v0.3.13" ".\Raptor-Link-Setup-0.3.13.exe" ".\Raptor-Link-0.3.13-Projet.zip" --repo "${{ github.repository }}" --clobber
           } else {
             gh release create "v0.3.13" ".\Raptor-Link-Setup-0.3.13.exe" ".\Raptor-Link-0.3.13-Projet.zip" --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Raptor Link v0.3.13 Beta" --notes-file ".\release-notes-0.3.13.md"
