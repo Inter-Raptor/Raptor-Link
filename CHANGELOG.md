@@ -4,6 +4,18 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.3.8 Beta
+
+- Added a native MSI Mystic Light connector using MSI's official public SDK; OpenRGB is no longer required for MSI.
+- Added in-app setup that downloads the official MSI SDK kit from MSI and extracts the x64 DLL into Raptor Link's local data folder instead of redistributing MSI's proprietary DLL.
+- MSI devices/zones exposed by the SDK can be selected as RGB sources and their reported colors can feed WLED mappings.
+- The MSI SDK runs in a disposable child process with a watchdog, so a hung MSI call should not block WLED, PC activity, iCUE or the Stop button.
+- iCUE remains explicitly marked **Tested & Validated**; MSI is **Native Beta**.
+- Other vendor integrations remain Beta through OpenRGB in this build.
+- Added native MSI source regression tests and SDK installation tests.
+
+> MSI's public SDK may not expose a true per-frame RGB value for every animated effect. Dynamic Mystic Light effects therefore remain part of the Beta validation effort.
+
 ## 0.3.7 Beta
 
 - Added a real OpenRGB SDK source using the local OpenRGB server on port 6742.
