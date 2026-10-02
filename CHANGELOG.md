@@ -4,6 +4,18 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.3.7 Beta
+
+- Added a real OpenRGB SDK source using the local OpenRGB server on port 6742.
+- Added selectable Beta source presets for MSI Mystic Light, Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB, SteelSeries GG / Prism and generic OpenRGB hardware.
+- Corsair iCUE is explicitly marked **Tested & Validated**.
+- All other RGB ecosystems are explicitly marked **Beta / In development** in the source selector and compatibility pages.
+- OpenRGB devices and LEDs are detected and can be mapped to WLED zones.
+- OpenRGB failures are isolated from the iCUE/WLED engine and reconnect automatically.
+- Added OpenRGB protocol and worker regression tests.
+
+> Beta brand integrations currently use OpenRGB as the hardware bridge. They do not yet hook directly into each vendor application’s private animation engine.
+
 ## 0.3.6 Beta
 
 - Startup check for newer GitHub Releases, without blocking startup when offline.
