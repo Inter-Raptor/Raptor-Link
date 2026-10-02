@@ -19,6 +19,7 @@ import time
 import urllib.request
 
 from cue_base import Cue, Device, Filter, Position, Color, check, Idle, sources
+from openrgb_source import OpenRGBWorker
 
 HTTP=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True},'targets':[]}
@@ -259,7 +260,7 @@ class Engine:
     def __init__(self,path,demo=False):
         self.path=path;self.demo=demo;self.lock=threading.RLock();self.done=threading.Event()
         self.config=validate(DEFAULT);self.devices=[];self.colors={};self.logs=[];self.active=[];self.original={}
-        self.want_run=False;self.running=False;self.keep_awake=False;self.status='Démarrage';self.icue=None;self.icue_notice=False;self.loop_heartbeat=time.monotonic()
+        self.want_run=False;self.running=False;self.keep_awake=False;self.status='Démarrage';self.icue=None;self.openrgb=None;self.icue_notice=False;self.openrgb_notice=False;self.loop_heartbeat=time.monotonic()
         self.plan_ip='';self.plan_frame=[];self.preview_device='';self.idle=0;self.is_locked=False;self.target_status={};self.revision=0;self.scan_requested=True
         try:
             if path.exists(): self.config=validate(json.loads(path.read_text(encoding='utf-8')))
@@ -276,7 +277,7 @@ class Engine:
         with self.lock:
             return copy.deepcopy({'devices':self.devices,'colors':self.colors,'running':self.running,'requested':self.want_run,
               'status':self.status,'logs':self.logs[-15:],'idle':int(self.idle),'locked':self.is_locked,'keep_awake':self.keep_awake,
-              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'engine_age':max(0,time.monotonic()-self.loop_heartbeat),'icue':self.icue.snapshot() if self.icue else {},'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
+              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'engine_age':max(0,time.monotonic()-self.loop_heartbeat),'icue':self.icue.snapshot() if self.icue else {},'openrgb':self.openrgb.snapshot() if self.openrgb else {},'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
     def save(self,cfg):
         cfg=validate(cfg)
         with self.lock:
@@ -351,7 +352,9 @@ class Engine:
         self.udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);self.udp.settimeout(.2)
         pool=ThreadPoolExecutor(max_workers=8);pending={};health={};next_probe={}
         self.capture=Capture();last_frame=time.monotonic();last_error=''
-        if not self.demo:self.icue=IcueWorker(self.log)
+        if not self.demo:
+            self.icue=IcueWorker(self.log)
+            self.openrgb=OpenRGBWorker(self.log)
         idle=None
         try:
             if not self.demo:idle=WinIdle()
@@ -362,37 +365,56 @@ class Engine:
                     if self.running and (not self.want_run or self.run_revision!=self.revision):
                         for f in pending.values():f.cancel()
                         pending={};self.restore();health={};next_probe={}
-                    cue_state={}
+                    cue_state={};openrgb_state={}
                     if not self.demo:
                         self.idle=idle.seconds();self.is_locked=idle.locked()
                         cue_state=self.icue.snapshot() if self.icue else {}
-                        self.devices=cue_state.get('devices',[])
+                        openrgb_state=self.openrgb.snapshot() if self.openrgb else {}
+                        cue_devices=copy.deepcopy(cue_state.get('devices',[]))
+                        for d in cue_devices:d['provider']='icue'
+                        openrgb_devices=copy.deepcopy(openrgb_state.get('devices',[]))
+                        self.devices=cue_devices+openrgb_devices
                     for t in self.active:
                         for r in t['routes']:
-                            if r['source']!='icue':continue
+                            if r['source'] not in ('icue','openrgb'):continue
                             current=next((d for d in self.devices if d['id']==r['device']),None)
                             if current:r['device_model']=current['model'];r['device_serial']=current.get('serial','')
                             else:
                                 matches=[d for d in self.devices if (r.get('device_serial') and d.get('serial')==r['device_serial']) or (not r.get('device_serial') and r.get('device_model')==d['model'])]
                                 if len(matches)==1 and set(r['ids'])<={p['id'] for p in matches[0]['positions']}:r['device']=matches[0]['id']
-                    required={self.preview_device}|{r['device'] for t in self.config['targets']+self.active for r in t['routes']}
+                    required={self.preview_device}|{r['device'] for t in self.config['targets']+self.active for r in t['routes'] if r.get('source') in ('icue','openrgb')}
                     if self.demo:
                         colors={}
                         for d in self.devices:
                             if d['id'] in required:
                                 colors[d['id']]={p['id']:tuple(round(x*255) for x in colorsys.hsv_to_rgb((start*.1+p['x']/600+p['y']/600)%1,.85,1)) for p in d['positions']}
                     else:
-                        if self.icue:self.icue.configure(required,self.scan_requested,self.config['settings']['fps'])
+                        force_scan=self.scan_requested
+                        if self.icue:self.icue.configure({x for x in required if not str(x).startswith('openrgb:')},force_scan,self.config['settings']['fps'])
+                        if self.openrgb:self.openrgb.configure({x for x in required if str(x).startswith('openrgb:')},force_scan,min(25,self.config['settings']['fps']))
                         self.scan_requested=False
                         cue_state=self.icue.snapshot() if self.icue else {}
-                        self.devices=cue_state.get('devices',self.devices)
-                        colors={} if cue_state.get('stalled') else cue_state.get('colors',{})
+                        openrgb_state=self.openrgb.snapshot() if self.openrgb else {}
+                        cue_devices=copy.deepcopy(cue_state.get('devices',[]))
+                        for d in cue_devices:d['provider']='icue'
+                        self.devices=cue_devices+copy.deepcopy(openrgb_state.get('devices',[]))
+                        colors={}
+                        if not cue_state.get('stalled'):colors.update(cue_state.get('colors',{}))
+                        colors.update(openrgb_state.get('colors',{}))
                         if cue_state.get('stalled') and not self.icue_notice:
                             self.log('iCUE ne répond plus pendant '+cue_state.get('operation','une opération')+' ; le moteur WLED reste actif.')
                             self.icue_notice=True
                         elif not cue_state.get('stalled') and self.icue_notice:
                             self.log('iCUE : communication rétablie.')
                             self.icue_notice=False
+                        uses_openrgb=any(r.get('source')=='openrgb' for t in self.config['targets']+self.active for r in t.get('routes',[]))
+                        if uses_openrgb and not openrgb_state.get('connected') and not self.openrgb_notice:
+                            detail=openrgb_state.get('error') or 'serveur SDK indisponible'
+                            self.log('OpenRGB (Bêta) : '+str(detail)+' — démarrez le serveur SDK local sur le port 6742.')
+                            self.openrgb_notice=True
+                        elif openrgb_state.get('connected') and self.openrgb_notice:
+                            self.log('OpenRGB (Bêta) : connexion rétablie.')
+                            self.openrgb_notice=False
                     self.colors=colors
                     if self.want_run and not self.running and not getattr(self,'test_busy',False):self.prepare()
                     routes=[r for t in self.active for r in t['routes']] if self.running else []
@@ -422,7 +444,7 @@ class Engine:
                                 states[ip]='Reconnexion…' if ip not in health else health[ip];continue
                             errors=[]
                             for i,r in enumerate(t['routes']):
-                                if r['source']=='icue' and (not r['ids'] or any(x not in colors.get(r['device'],{}) for x in r['ids'])):
+                                if r['source'] in ('icue','openrgb') and (not r['ids'] or any(x not in colors.get(r['device'],{}) for x in r['ids'])):
                                     errors.append('Association '+str(i+1)+' : appareil ou LED indisponibles')
                             if not self.demo and on_screen_missing(t,self.capture):errors.append('Écran indisponible : vérifiez la sélection dans la zone')
                             if not t['routes']:errors.append('Ajoutez une association')
@@ -457,7 +479,10 @@ class Engine:
                     self.target_status=states;self.previews=frames
                     base_status=('Synchronisation active' if self.active else 'Activez au moins un éclairage') if self.running else 'Prêt · choisissez vos associations'
                     uses_icue=any(r.get('source')=='icue' for t in self.active for r in t.get('routes',[]))
-                    self.status=(base_status+' · iCUE ne répond plus') if uses_icue and cue_state.get('stalled') else base_status
+                    uses_openrgb=any(r.get('source')=='openrgb' for t in self.active for r in t.get('routes',[]))
+                    if uses_icue and cue_state.get('stalled'):self.status=base_status+' · iCUE ne répond plus'
+                    elif uses_openrgb and not openrgb_state.get('connected'):self.status=base_status+' · OpenRGB Bêta non connecté'
+                    else:self.status=base_status
                     last_error=''
                 except Exception as exc:
                     if str(exc)!=last_error:self.log(str(exc));last_error=str(exc)
@@ -467,6 +492,7 @@ class Engine:
         finally:
             pool.shutdown(wait=False,cancel_futures=True);self.restore();self.capture.close();self.udp.close()
             if self.icue:self.icue.close()
+            if self.openrgb:self.openrgb.close()
 
 # Découverte mDNS : requête PTR, lecture des enregistrements A supplémentaires.
 def dns_name(data,offset,depth=0):
