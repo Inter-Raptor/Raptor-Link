@@ -76,7 +76,8 @@ class MsiWorker:
     def _command(self):
         root=Path(__file__).resolve().parent
         helper=root/"native"/"msi_bridge.exe"
-        return [str(helper),str(self.dll_path)]
+        stage=self.data_dir/"msi-native-stage.json"
+        return [str(helper),str(self.dll_path),str(stage)]
     def configure(self,required,force_scan=False,fps=12):
         with self.lock:
             self.required={str(x) for x in required if str(x).startswith("msi:")}
@@ -167,7 +168,15 @@ class MsiWorker:
                 line=process.stdout.readline()
                 if not line:
                     code=process.poll()
-                    raise RuntimeError("pont MSI natif interrompu"+("" if code is None else " (code "+str(code)+")"))
+                    stage={}
+                    try:
+                        stage=json.loads((self.data_dir/"msi-native-stage.json").read_text(encoding="utf-8"))
+                    except Exception:
+                        pass
+                    self._publish(diagnostic={**self.diagnostic,**stage,"bridge_exit_code":code,"native_helper":True})
+                    where=stage.get("stage")
+                    suffix=(" à l'étape "+str(where)) if where else ""
+                    raise RuntimeError("pont MSI natif interrompu"+("" if code is None else " (code "+str(code)+")")+suffix)
                 data=json.loads(line)
                 with self.lock:self.busy_since=None;self.operation=""
                 if do_scan:last_scan=time.monotonic()
