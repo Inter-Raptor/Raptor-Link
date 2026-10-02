@@ -4,7 +4,7 @@
 
 ### Bring WLED into your PC RGB ecosystem.
 
-**WLED + Corsair iCUE + screen ambience + presets + automation — from one Windows app.**
+**WLED + Corsair iCUE + screen ambience + presets + automation + community feedback — from one Windows app.**
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://github.com/Inter-Raptor/Raptor-Link)
 [![WLED](https://img.shields.io/badge/WLED-compatible-ffb000)](https://kno.wled.ge/)
@@ -251,6 +251,14 @@ Areas of interest include:
 - additional language support
 
 ---
+
+## 💬 Built-in feedback & hardware testing
+
+Raptor Link 0.3.6 adds an in-app feedback center. Users can prepare questions, bug reports, suggestions, ratings and hardware compatibility reports without exposing a GitHub token inside the application. The final report opens on GitHub pre-filled so the user can review it before submitting.
+
+The app also lists future RGB ecosystems where community testers are especially useful: MSI Mystic Light, Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB, SteelSeries GG / Prism and OpenRGB.
+
+These ecosystems are **testing targets and are not yet advertised as supported connectors**.
 
 ## 🐛 Bugs, ideas and feedback
 
