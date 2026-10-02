@@ -49,6 +49,9 @@ def extras(cfg,raw):
             if r['source'] not in ['icue','msi','openrgb','rainbow','breathe','chase','solid','screen','audio']:raise ValueError('Source inconnue')
             r['rgb_ecosystem']=str(r.get('rgb_ecosystem','openrgb'))[:32]
             if r['rgb_ecosystem'] not in ['openrgb','msi','gigabyte','asus','razer','logitech','steelseries']:r['rgb_ecosystem']='openrgb'
+            # 0.3.7 represented MSI through OpenRGB. From 0.3.8, migrate that
+            # choice to the native MSI SDK connector automatically.
+            if r['source']=='openrgb' and r['rgb_ecosystem']=='msi':r['source']='msi'
             ids=r.get('screen_ids',['primary'])
             if not isinstance(ids,list) or not 1<=len(ids)<=32 or any(not isinstance(v,str) or not v or len(v)>128 for v in ids):raise ValueError('Sélectionnez au moins un écran pour la zone')
             ids=list(dict.fromkeys(ids))
