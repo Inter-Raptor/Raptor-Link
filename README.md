@@ -4,7 +4,7 @@
 
 ### Bring WLED into your PC RGB ecosystem.
 
-**WLED + Corsair iCUE + OpenRGB-compatible PC lighting + screen ambience + presets + automation — from one Windows app.**
+**WLED + Corsair iCUE + direct Raptor Link effects + screen ambience + presets + automation — from one Windows app.**
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://github.com/Inter-Raptor/Raptor-Link)
 [![WLED](https://img.shields.io/badge/WLED-compatible-ffb000)](https://kno.wled.ge/)
@@ -252,27 +252,17 @@ Areas of interest include:
 
 ---
 
-### MSI Mystic Light — native Beta
+### Experimental RGB lab
 
-MSI hardware can now be used **without OpenRGB**. Raptor Link talks to MSI's official Mystic Light SDK in an isolated worker process. Because MSI's proprietary SDK DLL is not redistributed with this project, the app offers a button that downloads the official SDK kit directly from MSI and extracts the x64 DLL into Raptor Link's local data folder.
+Raptor Link's normal interface is intentionally centered on **Corsair iCUE** and Raptor Link's own direct sources such as screen sampling, audio reaction and local effects.
 
-Requirements for the native MSI connector:
-- Windows x64.
-- MSI Center installed with the Mystic Light module enabled.
-- The official MSI SDK installed through Raptor Link or otherwise discoverable on the PC.
-- Some systems may require launching Raptor Link as administrator for the MSI SDK.
+Unfinished vendor connectors — including MSI Mystic Light, OpenRGB and brand-specific experiments — are hidden by default. Advanced users can expose them from **Settings → Advanced → RGB lab**.
 
-The native MSI connector is still marked **Beta**. The public SDK exposes device/LED state, but some vendor-side animated effects may not provide a true instantaneous RGB frame through the read API. Static colors and devices that expose current colors are the primary validation target for this release.
+These connectors are experimental, limited and may require extra vendor software, SDKs or OpenRGB. They are kept in the project for hardware testing and future development, but they are not presented as part of the normal supported workflow.
 
 ## 💬 Built-in feedback & hardware testing
 
-Raptor Link 0.3.7 includes the in-app feedback center introduced in 0.3.6. Users can prepare questions, bug reports, suggestions, ratings and hardware compatibility reports without exposing a GitHub token inside the application. The final report opens on GitHub pre-filled so the user can review it before submitting.
-
-Raptor Link 0.3.8 adds a **native MSI Mystic Light connector** in addition to the OpenRGB source. This makes compatible hardware from MSI, Gigabyte, ASUS, Razer, Logitech, SteelSeries and other OpenRGB-supported vendors usable as a color source for WLED.
-
-**Corsair iCUE is the tested and validated integration.** The other ecosystems are clearly marked **Beta / In development** because they have not yet been validated across enough real-world hardware.
-
-For the Beta integrations, OpenRGB must currently be running locally with its SDK server available on port `6742`. Raptor Link reads the devices and LED colors exposed by OpenRGB; it does not yet hook directly into the private animation engines of Mystic Light, RGB Fusion, Aura, G HUB, etc.
+Raptor Link keeps an in-app feedback center for questions, bugs, suggestions, comments and ratings. Users can prepare questions, bug reports, suggestions, ratings and hardware compatibility reports without exposing a GitHub token inside the application. The final report opens on GitHub pre-filled so the user can review it before submitting.
 
 ## 🐛 Bugs, ideas and feedback
 
