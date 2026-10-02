@@ -3,7 +3,7 @@ name: Build Raptor Link 0.3.14 beta
 on:
   push:
     branches:
-      - release/0.3.14-classic
+      - release/0.3.14-startup-stability
   workflow_dispatch:
 
 jobs:
