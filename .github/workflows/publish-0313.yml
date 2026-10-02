@@ -1,9 +1,6 @@
 name: Publish Raptor Link v0.3.13
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
