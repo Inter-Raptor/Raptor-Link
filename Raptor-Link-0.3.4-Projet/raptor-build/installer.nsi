@@ -6,7 +6,7 @@ Name "Raptor Link"
 !define APPDIR "../RaptorLink"
 !endif
 !ifndef OUTPUT
-!define OUTPUT "../Raptor-Link-Setup-0.3.5.exe"
+!define OUTPUT "../Raptor-Link-Setup-0.3.7.exe"
 !endif
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\RaptorLink"
@@ -15,14 +15,14 @@ RequestExecutionLevel user
 SetCompressor /SOLID lzma
 Icon "${APPDIR}\\icon.ico"
 UninstallIcon "${APPDIR}\\icon.ico"
-VIProductVersion "0.3.5.0"
+VIProductVersion "0.3.7.0"
 VIAddVersionKey "ProductName" "Raptor Link"
 VIAddVersionKey "FileDescription" "Raptor Link - installation Windows"
-VIAddVersionKey "FileVersion" "0.3.5"
+VIAddVersionKey "FileVersion" "0.3.7"
 VIAddVersionKey "LegalCopyright" "Application independante - 2026"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Bienvenue dans Raptor Link"
-!define MUI_WELCOMEPAGE_TEXT "Synchronisez vos eclairages WLED avec les animations iCUE.$\r$\n$\r$\nInterface visuelle, plusieurs appareils et automatismes.$\r$\n$\r$\nWindows 64 bits et iCUE sont necessaires. Version beta.$\r$\n$\r$\nFermez Aurora et votre ancienne passerelle avant de poursuivre."
+!define MUI_WELCOMEPAGE_TEXT "Synchronisez vos eclairages WLED avec les animations iCUE.$\r$\n$\r$\nInterface visuelle, plusieurs appareils et automatismes.$\r$\n$\r$\nWindows 64 bits et WLED sont necessaires. iCUE est optionnel. Les autres sources RGB utilisent OpenRGB en beta.$\r$\n$\r$\nFermez Aurora et votre ancienne passerelle avant de poursuivre."
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -61,7 +61,7 @@ Section "Raptor Link"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "DisplayName" "Raptor Link"
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "UninstallString" '"$INSTDIR\Desinstaller.exe"'
  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "DisplayIcon" "$INSTDIR\icon.ico"
- WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "DisplayVersion" "0.3.5 beta"
+ WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "DisplayVersion" "0.3.7 beta"
  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "NoModify" 1
  WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\AuroraWLED" "NoRepair" 1
 SectionEnd
