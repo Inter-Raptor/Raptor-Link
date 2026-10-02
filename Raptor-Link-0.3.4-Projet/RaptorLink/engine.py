@@ -377,10 +377,12 @@ class Engine:
                     for t in self.active:
                         for r in t['routes']:
                             if r['source'] not in ('icue','openrgb'):continue
-                            current=next((d for d in self.devices if d['id']==r['device']),None)
+                            expected_provider='openrgb' if r['source']=='openrgb' else 'icue'
+                            current=next((d for d in self.devices if d['id']==r['device'] and d.get('provider','icue')==expected_provider),None)
                             if current:r['device_model']=current['model'];r['device_serial']=current.get('serial','')
                             else:
-                                matches=[d for d in self.devices if (r.get('device_serial') and d.get('serial')==r['device_serial']) or (not r.get('device_serial') and r.get('device_model')==d['model'])]
+                                candidates=[d for d in self.devices if d.get('provider','icue')==expected_provider]
+                                matches=[d for d in candidates if (r.get('device_serial') and d.get('serial')==r['device_serial']) or (not r.get('device_serial') and r.get('device_model')==d['model'])]
                                 if len(matches)==1 and set(r['ids'])<={p['id'] for p in matches[0]['positions']}:r['device']=matches[0]['id']
                     required={self.preview_device}|{r['device'] for t in self.config['targets']+self.active for r in t['routes'] if r.get('source') in ('icue','openrgb')}
                     if self.demo:
