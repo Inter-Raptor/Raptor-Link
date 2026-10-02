@@ -296,9 +296,12 @@ class Engine:
                 'error':state.get('error',''),
                 'stalled':bool(state.get('stalled')),
                 'devices':len(state.get('devices',[])),
+                'diagnostic':copy.deepcopy(state.get('diagnostic',{})),
+                'restarts':state.get('restarts',0),
+                'last_ok':state.get('last_ok',0),
             })
         else:
-            base.update({'worker_available':False,'connected':False,'error':'','stalled':False,'devices':0})
+            base.update({'worker_available':False,'connected':False,'error':'','stalled':False,'devices':0,'diagnostic':{},'restarts':0,'last_ok':0})
         return base
 
     def install_msi_sdk(self):
