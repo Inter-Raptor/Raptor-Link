@@ -12,6 +12,8 @@ import math
 import os
 from pathlib import Path
 import socket
+import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -139,6 +141,106 @@ class GenericCue(Cue):
         check(self.dll.CorsairGetLedColors(d['id'].encode(),len(cols),cols))
         return {c.id:(c.r,c.g,c.b) for c in cols}
 
+class IcueWorker:
+    """Run the native Corsair SDK in a disposable child process.
+
+    A native SDK call may stop returning after a long session or a Windows
+    sleep/resume. Keeping it out of the engine process means the watchdog can
+    kill and restart only the iCUE bridge without freezing presence detection,
+    WLED output, the web UI or the Stop command.
+    """
+    def __init__(self,logger,command=None):
+        self.log=logger;self.lock=threading.RLock();self.done=threading.Event();self.process=None
+        self.required=set();self.force_scan=True;self.interval=1/25;self.devices=[];self.colors={};self.error=''
+        self.busy_since=None;self.operation='';self.last_progress=time.monotonic();self.last_ok=0;self.restarts=0
+        self.command=command or self._default_command()
+        self.thread=threading.Thread(target=self.loop,daemon=True,name='RaptorLink-iCUE-bridge');self.thread.start()
+    def _default_command(self):
+        root=Path(__file__).resolve().parent
+        runtime=root/'runtime'/'python.exe'
+        python=str(runtime if runtime.exists() else Path(sys.executable))
+        return [python,'-u',str(root/'icue_worker.py')]
+    def configure(self,required,force_scan=False,fps=25):
+        with self.lock:
+            self.required={str(x) for x in required if x}
+            self.interval=1/max(1,min(40,int(fps)))
+            if force_scan:self.force_scan=True
+    def snapshot(self):
+        now=time.monotonic();kill=None
+        with self.lock:
+            stalled=self.busy_since is not None and now-self.busy_since>4
+            if stalled and self.process is not None and self.process.poll() is None:
+                kill=self.process
+            state={'devices':copy.deepcopy(self.devices),'colors':copy.deepcopy(self.colors),'error':self.error,
+                   'stalled':stalled,'operation':self.operation if stalled else '',
+                   'age':max(0,now-self.last_progress),'last_ok':self.last_ok,'restarts':self.restarts}
+        if kill is not None:
+            try:kill.kill()
+            except Exception:pass
+        return state
+    def close(self):
+        self.done.set();self._kill();self.thread.join(timeout=1)
+    def _dispose(self,p):
+        if p is None:return
+        if p.poll() is None:
+            try:p.kill()
+            except Exception:pass
+        try:p.wait(timeout=.5)
+        except Exception:pass
+        for stream in (p.stdin,p.stdout):
+            try:
+                if stream:stream.close()
+            except Exception:pass
+        with self.lock:
+            if self.process is p:self.process=None
+    def _kill(self):
+        with self.lock:p=self.process
+        self._dispose(p)
+    def _start(self):
+        flags=getattr(subprocess,'CREATE_NO_WINDOW',0) if os.name=='nt' else 0
+        p=subprocess.Popen(self.command,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
+                           text=True,encoding='utf-8',bufsize=1,cwd=str(Path(__file__).resolve().parent),creationflags=flags)
+        with self.lock:self.process=p;self.restarts+=1
+        return p
+    def _publish(self,data=None,error=None):
+        with self.lock:
+            if data is not None:
+                self.devices=copy.deepcopy(data.get('devices',[]))
+                self.colors={str(dev):{int(k):tuple(v) for k,v in vals.items()} for dev,vals in data.get('colors',{}).items()}
+                self.error=str(data.get('error',''));self.last_ok=time.monotonic() if data.get('ok') else self.last_ok
+            if error is not None:self.error=str(error)
+            self.last_progress=time.monotonic()
+    def loop(self):
+        process=None;last_scan=0;retry_at=0
+        while not self.done.is_set():
+            try:
+                now=time.monotonic()
+                if process is None or process.poll() is not None:
+                    if now<retry_at:
+                        self.done.wait(min(.2,retry_at-now));continue
+                    process=self._start();last_scan=0
+                with self.lock:
+                    required=sorted(self.required);force=self.force_scan;self.force_scan=False;interval=self.interval
+                do_scan=force or now-last_scan>5
+                request={'required':required,'scan':do_scan}
+                with self.lock:self.busy_since=time.monotonic();self.operation='détection iCUE' if do_scan else 'lecture des couleurs iCUE'
+                process.stdin.write(json.dumps(request,separators=(',',':'))+'\n');process.stdin.flush()
+                line=process.stdout.readline()
+                if not line:raise RuntimeError('pont iCUE interrompu')
+                data=json.loads(line)
+                with self.lock:self.busy_since=None;self.operation=''
+                if do_scan:last_scan=time.monotonic()
+                self._publish(data=data)
+                if not data.get('ok') and data.get('fatal'):
+                    raise RuntimeError(data.get('error','erreur iCUE'))
+                self.done.wait(interval)
+            except Exception as e:
+                with self.lock:self.busy_since=None;self.operation=''
+                self._publish(error=e)
+                self._dispose(process)
+                process=None;retry_at=time.monotonic()+1
+        self._dispose(process)
+
 class WinIdle(Presence):
     def __init__(self):
         super().__init__()
@@ -157,7 +259,7 @@ class Engine:
     def __init__(self,path,demo=False):
         self.path=path;self.demo=demo;self.lock=threading.RLock();self.done=threading.Event()
         self.config=validate(DEFAULT);self.devices=[];self.colors={};self.logs=[];self.active=[];self.original={}
-        self.want_run=False;self.running=False;self.keep_awake=False;self.status='Démarrage';self.cue=None
+        self.want_run=False;self.running=False;self.keep_awake=False;self.status='Démarrage';self.icue=None;self.icue_notice=False;self.loop_heartbeat=time.monotonic()
         self.plan_ip='';self.plan_frame=[];self.preview_device='';self.idle=0;self.is_locked=False;self.target_status={};self.revision=0;self.scan_requested=True
         try:
             if path.exists(): self.config=validate(json.loads(path.read_text(encoding='utf-8')))
@@ -174,7 +276,7 @@ class Engine:
         with self.lock:
             return copy.deepcopy({'devices':self.devices,'colors':self.colors,'running':self.running,'requested':self.want_run,
               'status':self.status,'logs':self.logs[-15:],'idle':int(self.idle),'locked':self.is_locked,'keep_awake':self.keep_awake,
-              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
+              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'engine_age':max(0,time.monotonic()-self.loop_heartbeat),'icue':self.icue.snapshot() if self.icue else {},'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
     def save(self,cfg):
         cfg=validate(cfg)
         with self.lock:
@@ -248,31 +350,23 @@ class Engine:
         import colorsys
         self.udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);self.udp.settimeout(.2)
         pool=ThreadPoolExecutor(max_workers=8);pending={};health={};next_probe={}
-        self.capture=Capture();last_scan=0;retry_at=0;last_frame=time.monotonic();last_error=''
+        self.capture=Capture();last_frame=time.monotonic();last_error=''
+        if not self.demo:self.icue=IcueWorker(self.log)
         idle=None
         try:
             if not self.demo:idle=WinIdle()
             else:self.demo_scan()
             while not self.done.is_set():
-                start=time.monotonic();dt=min(.2,start-last_frame);last_frame=start;now=datetime.datetime.now()
+                start=time.monotonic();self.loop_heartbeat=start;dt=min(.2,start-last_frame);last_frame=start;now=datetime.datetime.now()
                 try:
                     if self.running and (not self.want_run or self.run_revision!=self.revision):
-                        for f in pending.values():
-                            try:f.result(timeout=7)
-                            except Exception:pass
+                        for f in pending.values():f.cancel()
                         pending={};self.restore();health={};next_probe={}
+                    cue_state={}
                     if not self.demo:
                         self.idle=idle.seconds();self.is_locked=idle.locked()
-                        if self.cue is None and start>=retry_at:
-                            try:self.cue=GenericCue()
-                            except Exception as e:retry_at=start+5;self.log('iCUE : '+str(e))
-                        if self.cue and self.cue.connected.is_set():
-                            if self.scan_requested or start-last_scan>5:
-                                try:
-                                    self.devices=self.cue.scan();last_scan=start;self.scan_requested=False
-                                except Exception:
-                                    self.cue.close();self.cue=None;self.devices=[];retry_at=start+3
-                        else:self.devices=[]
+                        cue_state=self.icue.snapshot() if self.icue else {}
+                        self.devices=cue_state.get('devices',[])
                     for t in self.active:
                         for r in t['routes']:
                             if r['source']!='icue':continue
@@ -282,12 +376,23 @@ class Engine:
                                 matches=[d for d in self.devices if (r.get('device_serial') and d.get('serial')==r['device_serial']) or (not r.get('device_serial') and r.get('device_model')==d['model'])]
                                 if len(matches)==1 and set(r['ids'])<={p['id'] for p in matches[0]['positions']}:r['device']=matches[0]['id']
                     required={self.preview_device}|{r['device'] for t in self.config['targets']+self.active for r in t['routes']}
-                    colors={}
-                    for d in self.devices:
-                        if d['id'] not in required:continue
-                        try:
-                            colors[d['id']]={p['id']:tuple(round(x*255) for x in colorsys.hsv_to_rgb((start*.1+p['x']/600+p['y']/600)%1,.85,1)) for p in d['positions']} if self.demo else self.cue.read_device(d)
-                        except Exception:pass
+                    if self.demo:
+                        colors={}
+                        for d in self.devices:
+                            if d['id'] in required:
+                                colors[d['id']]={p['id']:tuple(round(x*255) for x in colorsys.hsv_to_rgb((start*.1+p['x']/600+p['y']/600)%1,.85,1)) for p in d['positions']}
+                    else:
+                        if self.icue:self.icue.configure(required,self.scan_requested,self.config['settings']['fps'])
+                        self.scan_requested=False
+                        cue_state=self.icue.snapshot() if self.icue else {}
+                        self.devices=cue_state.get('devices',self.devices)
+                        colors={} if cue_state.get('stalled') else cue_state.get('colors',{})
+                        if cue_state.get('stalled') and not self.icue_notice:
+                            self.log('iCUE ne répond plus pendant '+cue_state.get('operation','une opération')+' ; le moteur WLED reste actif.')
+                            self.icue_notice=True
+                        elif not cue_state.get('stalled') and self.icue_notice:
+                            self.log('iCUE : communication rétablie.')
+                            self.icue_notice=False
                     self.colors=colors
                     if self.want_run and not self.running and not getattr(self,'test_busy',False):self.prepare()
                     routes=[r for t in self.active for r in t['routes']] if self.running else []
@@ -350,7 +455,9 @@ class Engine:
                             if ip==self.plan_ip:self.plan_frame=frame
                             frames[ip]=frame[::max(1,len(frame)//200)]
                     self.target_status=states;self.previews=frames
-                    self.status=('Synchronisation active' if self.active else 'Activez au moins un éclairage') if self.running else 'Prêt · choisissez vos associations'
+                    base_status=('Synchronisation active' if self.active else 'Activez au moins un éclairage') if self.running else 'Prêt · choisissez vos associations'
+                    uses_icue=any(r.get('source')=='icue' for t in self.active for r in t.get('routes',[]))
+                    self.status=(base_status+' · iCUE ne répond plus') if uses_icue and cue_state.get('stalled') else base_status
                     last_error=''
                 except Exception as exc:
                     if str(exc)!=last_error:self.log(str(exc));last_error=str(exc)
@@ -358,10 +465,8 @@ class Engine:
                 fps=self.config['settings']['fps'] if self.running else 8
                 self.done.wait(max(0,1/fps-(time.monotonic()-start)))
         finally:
-            pool.shutdown(wait=True,cancel_futures=True);self.restore();self.capture.close();self.udp.close()
-            if self.cue:
-                try:self.cue.close()
-                except Exception:pass
+            pool.shutdown(wait=False,cancel_futures=True);self.restore();self.capture.close();self.udp.close()
+            if self.icue:self.icue.close()
 
 # Découverte mDNS : requête PTR, lecture des enregistrements A supplémentaires.
 def dns_name(data,offset,depth=0):
