@@ -1,8 +1,8 @@
-RAPTOR LINK 0.3.4 BÊTA — Un projet de Vivien Jardot
+RAPTOR LINK 0.3.11 BÊTA DIAGNOSTIC MSI — Un projet de Vivien Jardot
 
 INSTALLATION WINDOWS 64 BITS
 1. Dans l'ancienne application, utilisez Quitter près de l'horloge (pas seulement la croix).
-2. Lancez Raptor-Link-Setup-0.3.4.exe et choisissez le dossier.
+2. Lancez Raptor-Link-Setup-0.3.11.exe et choisissez le dossier.
 3. Ouvrez Raptor Link. Vos réglages Aurora sont repris automatiquement sur le même compte Windows.
 4. Enregistrez puis Démarrez. iCUE doit autoriser pythonw.exe dans ses réglages SDK pour les sources iCUE.
 La configuration reste dans %LOCALAPPDATA%\AuroraWLED pour assurer la migration.
@@ -103,3 +103,82 @@ Pour une source iCUE normale ou un effet autonome, le plan montre la forme du ru
 VALIDATION 0.3.4
 Tests automatisés : migrations, plusieurs réveils et priorités, durée du fondu et changement pendant transition, positions et quantités des LED, capture composite simulée avec coordonnées négatives et disposition personnalisée, navigation/enregistrement/réouverture de l’interface.
 La mise au premier plan et la capture réelle multi-écran doivent être vérifiées sur Windows ; cet environnement de construction ne possède pas votre matériel.
+
+
+VERSION 0.3.5 — Correctif de robustesse iCUE
+- Le SDK Corsair est isolé dans un processus séparé.
+- Un watchdog redémarre automatiquement le pont iCUE s'il ne répond plus.
+- Un blocage iCUE ne doit plus figer l'activité PC, les WLED ni le bouton Arrêter.
+
+
+VERSION 0.3.6 — Communauté, mises à jour et retours intégrés
+- Vérification non bloquante des nouvelles Releases GitHub au démarrage.
+- Centre Aide & retours pour préparer questions, bugs, suggestions et commentaires.
+- Demande facultative de note après environ une heure d'utilisation cumulée ; une note validée n'est plus redemandée.
+- Programme communautaire de tests pour MSI Mystic Light, Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB, SteelSeries GG / Prism et OpenRGB.
+- Les diagnostics joints à un retour sont facultatifs et n'incluent pas les adresses IP WLED.
+- Les autres écosystèmes RGB ne sont pas encore annoncés comme compatibles : ils restent en recherche de testeurs.
+- Le correctif de robustesse iCUE/watchdog de la 0.3.5 est inclus.
+
+
+VERSION 0.3.7 — Sources RGB multi-marques utilisables en Bêta
+- Corsair iCUE reste la source TESTÉE & VALIDÉE.
+- MSI Mystic Light, Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB, SteelSeries GG / Prism et OpenRGB sont maintenant sélectionnables comme sources RGB BÊTA.
+- Les sources BÊTA utilisent actuellement le serveur SDK local OpenRGB sur le port 6742 pour accéder au matériel compatible.
+- Lorsqu'une source BÊTA est sélectionnée, l'interface indique clairement qu'elle est encore en création et peut comporter des problèmes.
+- Les appareils OpenRGB sont réellement détectés, leurs LED sont sélectionnables et leurs couleurs peuvent alimenter les zones WLED.
+- Chaque backend reste isolé : une panne OpenRGB ne doit pas bloquer iCUE, WLED, l'activité PC ou le bouton Arrêter.
+- Les retours intégrés servent à valider progressivement les marques et modèles réels.
+
+IMPORTANT
+- Pour une source BÊTA, installez/démarrez OpenRGB et activez son serveur SDK local (port 6742).
+- Raptor Link ne prétend pas encore lire directement l'animation interne des logiciels Mystic Light/RGB Fusion/Aura eux-mêmes : il utilise OpenRGB comme passerelle vers le matériel compatible.
+
+
+VERSION 0.3.8 — MSI Mystic Light natif, sans OpenRGB
+- Corsair iCUE reste TESTÉ & VALIDÉ.
+- MSI Mystic Light dispose maintenant d'un connecteur natif BÊTA utilisant le SDK officiel MSI, sans passer par OpenRGB.
+- Le SDK MSI propriétaire n'est pas redistribué dans Raptor Link : un bouton permet de télécharger le kit directement depuis le site officiel MSI et d'en extraire la DLL x64 dans les données locales de Raptor Link.
+- MSI Center avec le module Mystic Light doit être installé. Suivant la machine, il peut être nécessaire de lancer Raptor Link en administrateur.
+- Les appareils et zones MSI exposés par le SDK sont détectés, leurs couleurs sont lues et peuvent alimenter les zones WLED.
+- Le pont MSI fonctionne dans un processus séparé avec watchdog pour éviter qu'un blocage du SDK MSI ne fige Raptor Link.
+- Certaines animations dynamiques Mystic Light peuvent ne pas exposer une trame RGB instantanée complète via le SDK public. La fonction reste donc BÊTA et les retours utilisateur sont importants.
+- Gigabyte RGB Fusion, ASUS Aura / Armoury Crate, Razer Chroma, Logitech G HUB et SteelSeries GG / Prism restent BÊTA via OpenRGB dans cette version.
+
+
+VERSION 0.3.9 — Diagnostic MSI Mystic Light
+- Corrige le texte erroné « Choisissez un appareil iCUE » lorsqu'une zone utilise MSI Mystic Light.
+- Ajoute un diagnostic MSI détaillé directement dans Sources RGB.
+- Le diagnostic affiche la présence de la DLL, MLAPI_Initialize, MLAPI_GetDeviceInfo, les types retournés, les nombres de LED, le nombre d'appareils créés par Raptor Link et la dernière erreur.
+- Cette version sert à identifier précisément pourquoi certaines cartes mères MSI visibles dans MSI Center ne remontent pas via le SDK public Mystic Light.
+- Le connecteur MSI reste BÊTA NATIVE · SANS OPENRGB.
+
+
+VERSION 0.3.10 — Pont MSI natif C++
+- Remplace l'appel direct au SDK MSI depuis Python par un petit pont Windows C++ natif.
+- Le pont initialise COM puis charge MysticLight_SDK_x64.dll et appelle MLAPI_Initialize/MLAPI_GetDeviceInfo avec les types natifs attendus par MSI.
+- Le pont reste isolé dans un processus séparé et surveillé par Raptor Link.
+- En cas d'exception native, le processus principal Raptor Link reste vivant et le diagnostic affiche le code de sortie.
+- MSI Mystic Light reste BÊTA NATIVE · SANS OPENRGB.
+- Le diagnostic MSI détaillé de la 0.3.9 est conservé.
+
+
+VERSION 0.3.11 — Diagnostic MSI natif par étape
+- Corrige l'erreur Accès refusé lors de la réinstallation du SDK MSI en arrêtant proprement le pont MSI avant de remplacer la DLL.
+- Le pont C++ ne lance plus automatiquement une détection complète avant de répondre.
+- Un journal d'étape local indique désormais exactement où le pont natif s'interrompt : chargement DLL, initialisation MSI, GetDeviceInfo, GetLedInfo ou GetLedColor.
+- Le diagnostic MSI de l'interface affiche la dernière étape atteinte et son code.
+- Le pont MSI est compilé avec le runtime C++ statique pour réduire les dépendances externes.
+
+
+VERSION 0.3.13 — Retour à l'expérience Raptor Link classique
+- L'interface normale est de nouveau centrée sur Corsair iCUE et les sources générées directement par Raptor Link : écran, audio, arc-en-ciel, respiration, comète et couleur fixe.
+- Corsair iCUE reste l'intégration matérielle tierce TESTÉE & VALIDÉE.
+- Mystic Light, OpenRGB, RGB Fusion, Aura, Razer, Logitech et SteelSeries sont masqués par défaut.
+- Pour les retrouver : Réglages > Réglages avancés > laboratoire RGB > Activer les sources RGB expérimentales.
+- Ces fonctions sont clairement indiquées comme limitées, compliquées et non finalisées.
+- Quand le laboratoire RGB est désactivé, les processus MSI/OpenRGB ne sont pas lancés.
+- Les anciennes associations expérimentales ne sont pas supprimées ; elles restent masquées/désactivées jusqu'à réactivation du laboratoire.
+- Le centre Aide & retours est conservé : questions, commentaires, bugs et suggestions.
+- La demande facultative de note après environ une heure reste présente et n'est demandée qu'une fois après validation.
+- La vérification des nouvelles versions au démarrage reste disponible.

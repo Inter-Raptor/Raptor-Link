@@ -1,0 +1,43 @@
+name: Build Raptor Link 0.3.5 beta
+
+on:
+  push:
+    branches:
+      - fix/icue-watchdog
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Raptor-Link-0.3.4-Projet
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run regression tests
+        shell: powershell
+        run: |
+          & ".\RaptorLink\runtime\python.exe" -m unittest discover -s raptor-build -p "test_*.py"
+
+      - name: Install NSIS
+        shell: powershell
+        run: choco install nsis -y --no-progress
+
+      - name: Build installer
+        shell: powershell
+        run: |
+          Remove-Item ".\raptor-build\payload" -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item ".\RaptorLink" ".\raptor-build\payload" -Recurse
+          Push-Location ".\raptor-build"
+          & "C:\Program Files (x86)\NSIS\makensis.exe" "/DAPPDIR=payload" "/DOUTPUT=..\Raptor-Link-Setup-0.3.5.exe" ".\installer.nsi"
+          Pop-Location
+          if (!(Test-Path ".\Raptor-Link-Setup-0.3.5.exe")) { throw "Installer was not generated" }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Raptor-Link-Setup-0.3.5
+          path: Raptor-Link-0.3.4-Projet/Raptor-Link-Setup-0.3.5.exe
+          if-no-files-found: error

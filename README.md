@@ -4,7 +4,7 @@
 
 ### Bring WLED into your PC RGB ecosystem.
 
-**WLED + Corsair iCUE + screen ambience + presets + automation — from one Windows app.**
+**WLED + Corsair iCUE + direct Raptor Link effects + screen ambience + presets + automation — from one Windows app.**
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://github.com/Inter-Raptor/Raptor-Link)
 [![WLED](https://img.shields.io/badge/WLED-compatible-ffb000)](https://kno.wled.ge/)
@@ -251,6 +251,18 @@ Areas of interest include:
 - additional language support
 
 ---
+
+### Experimental RGB lab
+
+Raptor Link's normal interface is intentionally centered on **Corsair iCUE** and Raptor Link's own direct sources such as screen sampling, audio reaction and local effects.
+
+Unfinished vendor connectors — including MSI Mystic Light, OpenRGB and brand-specific experiments — are hidden by default. Advanced users can expose them from **Settings → Advanced → RGB lab**.
+
+These connectors are experimental, limited and may require extra vendor software, SDKs or OpenRGB. They are kept in the project for hardware testing and future development, but they are not presented as part of the normal supported workflow.
+
+## 💬 Built-in feedback & hardware testing
+
+Raptor Link keeps an in-app feedback center for questions, bugs, suggestions, comments and ratings. Users can prepare questions, bug reports, suggestions, ratings and hardware compatibility reports without exposing a GitHub token inside the application. The final report opens on GitHub pre-filled so the user can review it before submitting.
 
 ## 🐛 Bugs, ideas and feedback
 

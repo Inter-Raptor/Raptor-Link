@@ -28,6 +28,7 @@ enable_dpi_awareness()
 from capture import audio_devices
 from audio_output import outputs
 from engine import Engine, DEFAULT, http, discover, validate
+from support import APP_VERSION, Engagement, diagnostics, find_update, issue_url
 
 INSTANCE=DATA/'instance.json'
 def request_existing():
@@ -57,12 +58,40 @@ class App:
     def __init__(self):
         self.token=secrets.token_urlsafe(32);self.done=threading.Event();self.tray=None
         self.engine=Engine(DATA/'config.json',DEMO)
+        self.engagement=Engagement(DATA/'engagement.json')
+        self.update_info={'checked':False,'available':False,'error':''}
         startup(self.engine.config['settings']['startup'])
         self.server=ThreadingHTTPServer(('127.0.0.1',0),self.handler())
         self.url='http://127.0.0.1:'+str(self.server.server_port)+'/#'+self.token
         from window import WindowController,focus_window
         self.window=WindowController(lambda:focus_window('Raptor Link · '+str(self.server.server_port)) if sys.platform=='win32' and not DEMO else False,self.launch_window)
         INSTANCE.write_text(json.dumps({'port':self.server.server_port,'token':self.token,'pid':os.getpid()}))
+        if self.engine.config['settings'].get('check_updates',True) and not DEMO:
+            threading.Thread(target=self.check_for_updates,daemon=True,name='RaptorLink-update-check').start()
+    def check_for_updates(self):
+        self.update_info=find_update(APP_VERSION)
+
+    def support_state(self):
+        return {
+            'version':APP_VERSION,
+            'update':copy.deepcopy(self.update_info),
+            'engagement':self.engagement.snapshot(),
+        }
+
+    def open_feedback(self,data):
+        kind=str(data.get('kind','comment'))[:30]
+        subject=str(data.get('subject',''))[:180]
+        message=str(data.get('message',''))[:12000]
+        ecosystem=str(data.get('ecosystem',''))[:200]
+        rating=data.get('rating')
+        if rating is not None:
+            rating=int(rating)
+            if not 1<=rating<=5:raise ValueError('La note doit être comprise entre 1 et 5.')
+        env=diagnostics(self.engine) if bool(data.get('include_diagnostics')) else None
+        url=issue_url(kind,subject,message,rating,env,ecosystem)
+        webbrowser.open(url)
+        return {'ok':True,'url':url}
+
     def open(self):
         self.window.open()
     def launch_window(self):
@@ -98,7 +127,8 @@ class App:
                     if self.path=='/api/screens':
                         try:return self.reply(200,{'screens':monitors(DEMO)})
                         except Exception as e:return self.reply(400,{'error':str(e)})
-                    if self.path=='/api/state':return self.reply(200,app.engine.snapshot())
+                    if self.path=='/api/state':
+                        state=app.engine.snapshot();state['app']=app.support_state();return self.reply(200,state)
                     if self.path=='/api/audio-devices':
                         try:out=outputs();error=''
                         except Exception as e:out=[];error='Sorties audio : '+str(e)
@@ -146,6 +176,8 @@ class App:
                     elif self.path=='/api/plan':app.engine.plan_frame=[];app.engine.plan_ip=str(data.get('ip',''))
                     elif self.path=='/api/preview':app.engine.preview_device=str(data.get('device',''))
                     elif self.path=='/api/refresh':app.engine.scan_requested=True
+                    elif self.path=='/api/msi-status':result=app.engine.msi_status()
+                    elif self.path=='/api/msi-install':result=app.engine.install_msi_sdk()
                     elif self.path=='/api/probe':
                         if DEMO:result={'name':'WLED Démonstration','count':160,'version':'demo'}
                         else:
@@ -159,6 +191,26 @@ class App:
                             groups=sources([Position(p['id'],p['x'],p['y']) for p in keyboard['positions']])
                             for t in result['targets']:
                                 r=t['routes'][0];r['device']=keyboard['id'];r['ids']=groups[r.pop('starter_source')]
+                    elif self.path=='/api/rating':
+                        action=str(data.get('action','submit'))
+                        if action=='submit':
+                            stars=app.engagement.submit_rating(data.get('stars'))
+                            result={'ok':True,'stars':stars}
+                        elif action=='later':
+                            app.engagement.snooze_rating(7);result={'ok':True}
+                        elif action=='never':
+                            app.engagement.never_rating();result={'ok':True}
+                        else:raise ValueError('Action de notation inconnue.')
+                    elif self.path=='/api/feedback':result=app.open_feedback(data)
+                    elif self.path=='/api/check-update':
+                        if app.engine.config['settings'].get('check_updates',True):
+                            app.update_info=find_update(APP_VERSION)
+                        else:app.update_info={'checked':True,'available':False,'error':''}
+                        result=copy.deepcopy(app.update_info)
+                    elif self.path=='/api/open-update':
+                        url=str(app.update_info.get('url',''))
+                        if not url.startswith('https://github.com/Inter-Raptor/Raptor-Link/releases/'):raise ValueError('Aucune mise à jour disponible.')
+                        webbrowser.open(url);result={'ok':True}
                     elif self.path=='/api/quit':app.done.set()
                     else:return self.reply(404,{'error':'Introuvable'})
                     self.reply(200,result)
@@ -184,11 +236,12 @@ class App:
         try:
             tray_revision=-1
             while not self.done.wait(.5):
+                self.engagement.tick()
                 if self.tray and tray_revision!=self.engine.revision:
                     self.tray.update_menu();tray_revision=self.engine.revision
         except KeyboardInterrupt:pass
         finally:
-            self.engine.shutdown();self.server.shutdown()
+            self.engagement.close();self.engine.shutdown();self.server.shutdown()
             if self.tray:self.tray.stop()
             INSTANCE.unlink(missing_ok=True)
 

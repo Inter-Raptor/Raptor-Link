@@ -1,0 +1,87 @@
+name: Build Raptor Link 0.3.12 beta
+
+on:
+  push:
+    branches:
+      - release/0.3.12-msi-warmup
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Raptor-Link-0.3.4-Projet
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build native MSI helper
+        shell: cmd
+        run: |
+          if not exist RaptorLink\native mkdir RaptorLink\native
+          cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /Fe:RaptorLink\native\msi_bridge.exe RaptorLink\native\msi_bridge.cpp ole32.lib oleaut32.lib
+          if not exist RaptorLink\native\msi_bridge.exe exit /b 1
+
+      - name: Run Python regression tests
+        shell: powershell
+        run: |
+          & ".\RaptorLink\runtime\python.exe" -m unittest discover -s raptor-build -p "test_*.py"
+
+      - name: Check Python syntax
+        shell: powershell
+        run: |
+          & ".\RaptorLink\runtime\python.exe" -m py_compile ".\RaptorLink\app.py" ".\RaptorLink\engine.py" ".\RaptorLink\support.py" ".\RaptorLink\icue_worker.py" ".\RaptorLink\openrgb_source.py" ".\RaptorLink\msi_sdk.py" ".\RaptorLink\msi_source.py" ".\RaptorLink\msi_worker.py"
+
+      - name: Check JavaScript syntax
+        shell: powershell
+        run: |
+          node --check ".\RaptorLink\web\ui.js"
+          node --check ".\RaptorLink\web\extras.js"
+
+      - name: Install NSIS
+        shell: powershell
+        run: choco install nsis -y --no-progress
+
+      - name: Build installer
+        shell: powershell
+        run: |
+          Remove-Item ".\raptor-build\payload" -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item ".\RaptorLink" ".\raptor-build\payload" -Recurse
+          Push-Location ".\raptor-build"
+          & "C:\Program Files (x86)\NSIS\makensis.exe" "/DAPPDIR=payload" "/DOUTPUT=..\Raptor-Link-Setup-0.3.12.exe" ".\installer.nsi"
+          Pop-Location
+          Remove-Item ".\raptor-build\payload" -Recurse -Force -ErrorAction SilentlyContinue
+          if (!(Test-Path ".\Raptor-Link-Setup-0.3.12.exe")) { throw "Installer was not generated" }
+
+      - name: Build complete project ZIP
+        shell: powershell
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "Raptor-Link-0.3.12-Projet"
+          Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item ".\RaptorLink" (Join-Path $stage "RaptorLink") -Recurse
+          Copy-Item ".\raptor-build" (Join-Path $stage "raptor-build") -Recurse
+          Get-ChildItem $stage -Directory -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force
+          $zip = Join-Path (Get-Location) "Raptor-Link-0.3.12-Projet.zip"
+          Compress-Archive -Path $stage -DestinationPath $zip -CompressionLevel Optimal -Force
+          if (!(Test-Path $zip)) { throw "Project ZIP was not generated" }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Raptor-Link-Setup-0.3.12
+          path: Raptor-Link-0.3.4-Projet/Raptor-Link-Setup-0.3.12.exe
+          if-no-files-found: error
+
+      - name: Upload complete project
+        uses: actions/upload-artifact@v4
+        with:
+          name: Raptor-Link-0.3.12-Projet
+          path: Raptor-Link-0.3.4-Projet/Raptor-Link-0.3.12-Projet.zip
+          if-no-files-found: error
