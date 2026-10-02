@@ -68,6 +68,8 @@ function renderMsiStatus(){
  if(!m.available){el.textContent=tr('SDK MSI officiel absent. Cliquez sur « Installer le SDK officiel MSI ».','Official MSI SDK is missing. Click “Install official MSI SDK”.');if(button){button.disabled=false;button.textContent=tr('Installer le SDK officiel MSI','Install official MSI SDK');}}
  else{if(button){button.disabled=false;button.textContent=tr('Réinstaller le SDK MSI','Reinstall MSI SDK');}const count=(m.devices||[]).length;if(m.stalled)el.textContent=tr('SDK MSI installé, mais un appel Mystic Light ne répond plus. Raptor Link va redémarrer le pont MSI.','MSI SDK installed, but a Mystic Light call is not responding. Raptor Link will restart the MSI bridge.');else if(m.error)el.textContent=tr('SDK MSI installé · ','MSI SDK installed · ')+m.error+tr(' · Vérifiez MSI Center / Mystic Light.',' · Check MSI Center / Mystic Light.');else if(m.last_ok)el.textContent=tr('MSI natif connecté · ','Native MSI connected · ')+count+tr(' appareil(s) détecté(s).',' device(s) detected.');else el.textContent=tr('SDK MSI installé. En attente de MSI Center / Mystic Light…','MSI SDK installed. Waiting for MSI Center / Mystic Light…');}
  const lines=[
+  'Pont MSI natif C++ : '+(d.native_helper===false?'ABSENT':d.native_helper===true?'ACTIF':'EN ATTENTE'),
+  'Code sortie du pont : '+(d.bridge_exit_code??'—'),
   'DLL MSI : '+(m.available?'OK':'ABSENTE'),
   'Chemin : '+(m.path||'—'),
   'MLAPI_Initialize : '+(d.initialize_code===0?'OK (0)':d.initialize_code??'—'),
