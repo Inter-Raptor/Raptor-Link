@@ -4,6 +4,13 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.3.10 Beta
+
+- Replaced the Python/ctypes MSI call path with a native Windows C++ helper.
+- The helper initializes COM, loads MSI's official x64 Mystic Light SDK and calls the documented SDK exports with native Windows ABI types.
+- The MSI helper remains isolated behind the watchdog, so a vendor SDK crash cannot freeze the main Raptor Link process.
+- MSI diagnostics now include native-helper state and process exit code.
+
 ## 0.3.9 Diagnostic Beta
 
 - Added low-level MSI Mystic Light diagnostics in the Sources RGB page.
