@@ -157,7 +157,7 @@ class IcueWorker:
         self.thread=threading.Thread(target=self.loop,daemon=True,name='RaptorLink-iCUE-bridge');self.thread.start()
     def _default_command(self):
         root=Path(__file__).resolve().parent
-        runtime=root/'runtime'/'pythonw.exe'
+        runtime=root/'runtime'/'python.exe'
         python=str(runtime if runtime.exists() else Path(sys.executable))
         return [python,'-u',str(root/'icue_worker.py')]
     def configure(self,required,force_scan=False,fps=25):
