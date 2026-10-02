@@ -144,7 +144,7 @@ class MsiWorker:
             try:
                 if not self.dll_path:
                     self._publish(error="SDK MSI officiel non installé dans Raptor Link")
-                    self.done.wait(1);self.refresh_sdk();continue
+                    self.done.wait(5);self.refresh_sdk();continue
                 now=time.monotonic()
                 if process is None or process.poll() is not None:
                     if now<retry_at:
