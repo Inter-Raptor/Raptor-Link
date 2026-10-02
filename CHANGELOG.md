@@ -4,6 +4,14 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.3.11 Beta
+
+- Added persistent stage-by-stage diagnostics around the native MSI SDK calls.
+- Fixed MSI SDK reinstallation failing with Windows access denied while the DLL was still loaded.
+- Removed the eager MSI scan before the first bridge command.
+- MSI diagnostic UI now shows the last native stage, its code and detail.
+- Native MSI helper is built with the static C++ runtime.
+
 ## 0.3.10 Beta
 
 - Replaced the Python/ctypes MSI call path with a native Windows C++ helper.
