@@ -1,4 +1,4 @@
-# Rebuilding Raptor Link 0.3.10 Beta
+# Rebuilding Raptor Link 0.3.11 Beta
 
 The project archive is self-contained for Windows x64.
 
@@ -36,7 +36,7 @@ The GitHub Actions workflow stages `RaptorLink/` as the installer payload. Local
 Remove-Item ".\raptor-build\payload" -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item ".\RaptorLink" ".\raptor-build\payload" -Recurse
 Push-Location ".\raptor-build"
-& "C:\Program Files (x86)\NSIS\makensis.exe" "/DAPPDIR=payload" "/DOUTPUT=..\Raptor-Link-Setup-0.3.10.exe" ".\installer.nsi"
+& "C:\Program Files (x86)\NSIS\makensis.exe" "/DAPPDIR=payload" "/DOUTPUT=..\Raptor-Link-Setup-0.3.11.exe" ".\installer.nsi"
 Pop-Location
 Remove-Item ".\raptor-build\payload" -Recurse -Force
 ```
