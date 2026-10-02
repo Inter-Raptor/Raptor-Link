@@ -2,13 +2,19 @@ Unicode True
 !include "MUI2.nsh"
 !include "x64.nsh"
 Name "Raptor Link"
-OutFile "../Raptor-Link-Setup-0.3.5.exe"
+!ifndef APPDIR
+!define APPDIR "../RaptorLink"
+!endif
+!ifndef OUTPUT
+!define OUTPUT "../Raptor-Link-Setup-0.3.5.exe"
+!endif
+OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\Programs\RaptorLink"
 InstallDirRegKey HKCU "Software\AuroraWLED" "InstallDir"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
-Icon "../RaptorLink/icon.ico"
-UninstallIcon "../RaptorLink/icon.ico"
+Icon "${APPDIR}/icon.ico"
+UninstallIcon "${APPDIR}/icon.ico"
 VIProductVersion "0.3.5.0"
 VIAddVersionKey "ProductName" "Raptor Link"
 VIAddVersionKey "FileDescription" "Raptor Link - installation Windows"
@@ -45,7 +51,7 @@ Section "Raptor Link"
  Delete "$DESKTOP\Aurora WLED.lnk"
  RMDir /r "$SMPROGRAMS\Aurora WLED"
  Delete "$INSTDIR\AuroraWLED.exe"
- File /r /x "__pycache__" /x "demo-data" "../RaptorLink/*.*"
+ File /r /x "__pycache__" /x "demo-data" "${APPDIR}/*.*"
  WriteUninstaller "$INSTDIR\Desinstaller.exe"
  CreateDirectory "$SMPROGRAMS\Raptor Link"
  CreateShortcut "$SMPROGRAMS\Raptor Link\Raptor Link.lnk" "$INSTDIR\RaptorLink.exe" "" "$INSTDIR\icon.ico"
