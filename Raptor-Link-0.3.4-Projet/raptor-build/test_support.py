@@ -11,7 +11,7 @@ from support import Engagement, issue_url, version_tuple
 
 class Support(unittest.TestCase):
     def test_version_parser(self):
-        self.assertEqual(version_tuple('v0.3.7'), (0,3,6))
+        self.assertEqual(version_tuple('v0.3.7'), (0,3,7))
         self.assertEqual(version_tuple('0.4.0-beta'), (0,4,0))
         self.assertIsNone(version_tuple('latest'))
 
