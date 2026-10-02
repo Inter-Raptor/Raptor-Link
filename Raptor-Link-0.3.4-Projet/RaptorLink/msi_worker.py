@@ -16,13 +16,14 @@ def main():
             req=json.loads(line);required=set(req.get('required',[]))
             if sdk is None:sdk=MysticLightSDK(dll)
             if req.get('scan') or not devices:devices=sdk.scan()
+            diagnostic=sdk.diagnostic()
             colors={}
             for d in devices:
                 if d['id'] in required:
                     colors[d['id']]={str(k):list(v) for k,v in sdk.read_device(d).items()}
-            emit({'ok':True,'devices':devices,'colors':colors,'error':''})
+            emit({'ok':True,'devices':devices,'colors':colors,'diagnostic':diagnostic,'error':''})
         except Exception as exc:
-            emit({'ok':False,'fatal':True,'devices':[],'colors':{},'error':str(exc)})
+            emit({'ok':False,'fatal':True,'devices':[],'colors':{},'diagnostic':{'exception':type(exc).__name__,'message':str(exc)},'error':str(exc)})
             sdk=None;devices=[]
 
 if __name__=='__main__':main()
