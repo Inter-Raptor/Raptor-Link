@@ -70,7 +70,7 @@ class MsiWorker:
     def __init__(self,logger,data_dir):
         self.log=logger;self.data_dir=Path(data_dir);self.lock=threading.RLock();self.done=threading.Event()
         self.process=None;self.required=set();self.force_scan=True;self.interval=1/12
-        self.devices=[];self.colors={};self.error="";self.busy_since=None;self.operation=""
+        self.devices=[];self.colors={};self.error="";self.diagnostic={};self.busy_since=None;self.operation=""
         self.last_progress=time.monotonic();self.last_ok=0.0;self.restarts=0;self.dll_path=find_msi_sdk(self.data_dir)
         self.thread=threading.Thread(target=self.loop,daemon=True,name="RaptorLink-MSI-bridge");self.thread.start()
     def _command(self):
@@ -96,7 +96,7 @@ class MsiWorker:
             if stalled and self.process is not None and self.process.poll() is None:kill=self.process
             return_state={
                 "available":bool(self.dll_path),"path":str(self.dll_path) if self.dll_path else "",
-                "devices":copy.deepcopy(self.devices),"colors":copy.deepcopy(self.colors),"error":self.error,
+                "devices":copy.deepcopy(self.devices),"colors":copy.deepcopy(self.colors),"error":self.error,"diagnostic":copy.deepcopy(self.diagnostic),
                 "stalled":stalled,"operation":self.operation if stalled else "",
                 "age":max(0,now-self.last_progress),"last_ok":self.last_ok,"restarts":self.restarts,
             }
@@ -135,8 +135,11 @@ class MsiWorker:
                 self.devices=copy.deepcopy(data.get("devices",[]))
                 self.colors={str(dev):{int(k):tuple(v) for k,v in vals.items()} for dev,vals in data.get("colors",{}).items()}
                 self.error=str(data.get("error",""))
+                self.diagnostic=copy.deepcopy(data.get("diagnostic",self.diagnostic))
                 if data.get("ok"):self.last_ok=time.monotonic()
-            if error is not None:self.error=str(error)
+            if error is not None:
+                self.error=str(error)
+                self.diagnostic={**self.diagnostic,'exception_message':str(error)}
             self.last_progress=time.monotonic()
     def loop(self):
         process=None;last_scan=0.0;retry_at=0.0
