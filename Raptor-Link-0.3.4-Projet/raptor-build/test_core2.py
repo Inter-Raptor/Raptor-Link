@@ -79,6 +79,43 @@ class Core2(unittest.TestCase):
                 self.assertEqual(snap['state'],'AUTONOMOUS_UDP')
             finally:w.close()
 
+    def test_http_circuit_breaker_skips_repeat_calls(self):
+        http_calls=[];udp_payloads=[]
+        with patch.object(WledWorker,'_http',lambda self,payload,timeout=None:http_calls.append(payload.copy()) or {'success':True}), \
+             patch.object(WledWorker,'_udp_state',lambda self,payload:udp_payloads.append(payload.copy()) or setattr(self,'control_path','udp-json-fallback') or True):
+            w=WledWorker(target(),lambda *a,**k:None,None)
+            try:
+                w.RELEASE_SETTLE_SECONDS=.02
+                w.next_http_try=time.monotonic()+60
+                w.preset(11,'autonome',0)
+                time.sleep(.14)
+                snap=w.snapshot()
+                self.assertEqual(http_calls,[])
+                self.assertEqual(len(udp_payloads),1)
+                self.assertTrue(snap['pending_confirmation'])
+                self.assertGreater(snap['http_retry_in'],50)
+                self.assertEqual(snap['state'],'AUTONOMOUS_UDP')
+            finally:w.close()
+
+    def test_udp_fallback_is_confirmed_when_http_recovers(self):
+        probes=[];udp_payloads=[]
+        with patch.object(WledWorker,'_http',lambda self,payload,timeout=None:(_ for _ in ()).throw(AssertionError('HTTP POST should not be needed when state already matches'))), \
+             patch.object(WledWorker,'_http_state',lambda self,timeout=.8:probes.append(True) or {'on':True,'ps':9}), \
+             patch.object(WledWorker,'_udp_state',lambda self,payload:udp_payloads.append(payload.copy()) or setattr(self,'control_path','udp-json-fallback') or True):
+            w=WledWorker(target(),lambda *a,**k:None,None)
+            try:
+                w.RELEASE_SETTLE_SECONDS=.02
+                w.next_http_try=time.monotonic()+.06
+                w.preset(9,'autonome',0)
+                time.sleep(.18)
+                snap=w.snapshot()
+                self.assertEqual(len(udp_payloads),1)
+                self.assertTrue(probes)
+                self.assertFalse(snap['pending_confirmation'])
+                self.assertEqual(snap['control_path'],'http-recovered')
+                self.assertEqual(snap['state'],'AUTONOMOUS')
+            finally:w.close()
+
     def test_diagnostics_persistent_copyable_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Diagnostics(Path(tmp),'detailed',7,10)
