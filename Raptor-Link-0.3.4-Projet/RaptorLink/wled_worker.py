@@ -152,6 +152,7 @@ class WledWorker:
 
     def _loop(self):
         next_udp=0.0
+        next_trace=0.0
         previous_mode="hold"
         while not self.done.is_set():
             with self.lock:
@@ -186,6 +187,9 @@ class WledWorker:
                             if self.state!="STREAMING":
                                 self._event("detailed","WLED-STATE",f"{self.target['name']} streaming actif",ip=self.target["ip"])
                             self.state="STREAMING";self.detail=d.get("reason","Synchronisé")
+                            if now>=next_trace:
+                                self._event("trace","WLED-UDP",f"{self.target['name']} flux vivant",ip=self.target["ip"],packets=self.packets_sent,fps=d.get("fps",25),frame_leds=len(frame))
+                                next_trace=now+1
                         next_udp=now+interval
                     self.applied_rev=rev
                 else:
