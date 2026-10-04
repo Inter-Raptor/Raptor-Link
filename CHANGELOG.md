@@ -10,8 +10,11 @@ The format is based on a simple version history intended for GitHub Releases.
 - Before every autonomous preset, OFF or restore command, Raptor Link now sends an explicit WLED realtime-release packet even if the current Raptor Link process did not start the realtime session.
 - Added a second control path using WLED's JSON API over UDP. If the HTTP API times out or returns 503, the requested preset/ON/OFF state is sent through the notifier UDP port instead of hammering the web server for minutes.
 - HTTP failure no longer blocks a realtime iCUE stream from waking and resuming.
-- Diagnostics now expose the control path used (HTTP or UDP fallback), release packet count and UDP state-command count.
-- Added regression coverage for the forced realtime release and HTTP-to-UDP fallback.
+- Added an HTTP circuit breaker: after a timeout/503, that WLED is no longer hammered every few seconds. Retries back off from 15 s to 30 s and then 60 s while the other WLED workers continue normally.
+- UDP fallback is now treated as fire-and-forget rather than falsely confirmed. Raptor Link keeps a pending confirmation and converges the requested OFF/preset/restore state when the controller comes back online.
+- Recovery probes are lightweight and only happen after the cooldown. If the WLED already has the requested state, Raptor Link does not restart the preset unnecessarily.
+- Diagnostics now expose the control path, HTTP retry countdown, pending confirmation, fallback batch count, release packet count and UDP state-command count.
+- Added regression coverage for forced realtime release, HTTP-to-UDP fallback, circuit-breaker suppression and automatic HTTP recovery.
 - Hardware validation is required before merge.
 
 ## 0.4.0 Core 2 Beta
