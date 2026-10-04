@@ -369,24 +369,30 @@ class Engine:
         try:self.diag.close()
         except Exception:pass
     def restore(self):
+        now=datetime.datetime.now()
         for t in self.active:
-            if self.demo or t['ip'] not in self.original: continue
+            if self.demo:continue
             try:
-                self.udp.sendto(bytes([2,0]),(t['ip'],t['port']))
-                if not window(t['schedule'],datetime.datetime.now()): payload={'on':False,'transition':0}
-                elif t['on_stop']=='restore': payload=self.original.get(t['ip'],{'on':False})
-                elif t['on_stop']=='preset': payload={'ps':t['preset']}
-                else: payload={'on':False,'transition':0}
-                http(t['ip'],'/json/state',payload)
-            except Exception as e: self.log(t['name']+' : restauration impossible ('+str(e)+')')
-        self.active=[];self.original={};self.running=False;self.target_status={}
+                w=self.worker(t)
+                if not window(t['schedule'],now):
+                    w.off('Hors horaires à l’arrêt',0)
+                elif t['on_stop']=='restore':
+                    w.restore(self.original.get(t['ip'],{'on':False}),'Rétablissement de l’état initial')
+                elif t['on_stop']=='preset':
+                    w.preset(t['preset'],'Preset WLED à l’arrêt',0)
+                else:
+                    w.off('Arrêt de la synchronisation',0)
+            except Exception as e:self.log(t['name']+' : restauration impossible ('+str(e)+')','WLED-STATE')
+        self.active=[];self.original={};self.running=False;self.target_status={};self.gate_states={}
     def prepare(self):
         with self.lock:
             cfg=copy.deepcopy(self.config); revision=self.revision
         self.active=[t for t in cfg['targets'] if t['enabled']]
         self.run_revision=revision;self.run_settings=cfg['settings'];self.running=True
-        self.fades={};self.history={};self.frames={};self.target_status={};self.alarms={}
-        self.log('Synchronisation démarrée : chaque éclairage est traité indépendamment.')
+        self.fades={};self.history={};self.frames={};self.target_status={};self.alarms={};self.gate_states={}
+        for t in self.active:
+            if not self.demo:self.worker(t).hold('Préparation de la synchronisation')
+        self.log('Synchronisation Core 2 démarrée : un worker indépendant par WLED.','ENGINE')
     def identify(self,ip):
         t=next((t for t in self.config['targets'] if t['ip']==ip),None)
         if not t:raise ValueError('Enregistrez cet éclairage avant le test.')
