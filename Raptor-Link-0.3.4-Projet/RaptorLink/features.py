@@ -47,7 +47,7 @@ def extras(cfg,raw):
             if alarm.get('effect') not in ['rainbow','breathe','chase','solid']:raise ValueError('Effet réveil invalide')
         for r in t['routes']:
             r['source']=r.get('source','icue')
-            if r['source'] not in ['icue','msi','openrgb','rainbow','breathe','chase','solid','screen','audio']:raise ValueError('Source inconnue')
+            if r['source'] not in ['icue','msi','openrgb','rainbow','breathe','chase','solid','screen','audio','wled_preset']:raise ValueError('Source inconnue')
             r['rgb_ecosystem']=str(r.get('rgb_ecosystem','openrgb'))[:32]
             if r['rgb_ecosystem'] not in ['openrgb','msi','gigabyte','asus','razer','logitech','steelseries']:r['rgb_ecosystem']='openrgb'
             # 0.3.7 represented MSI through OpenRGB. From 0.3.8, migrate that
@@ -71,6 +71,7 @@ def extras(cfg,raw):
             r['color']=r.get('color',[255,100,20])
             if not isinstance(r['color'],list) or len(r['color'])!=3:raise ValueError('Couleur invalide')
             r['color']=[int(number(c,0,255,'Couleur')) for c in r['color']]
+            r['wled_preset']=int(number(r.get('wled_preset',1),1,250,'Preset WLED'))
             pts=r.get('points',[[.05,.5],[.95,.5]])
             if not isinstance(pts,list) or not 2<=len(pts)<=64:raise ValueError('Le tracé demande 2 à 64 points')
             r['points']=[[number(p[0],0,1,'Position'),number(p[1],0,1,'Position')] for p in pts]
@@ -80,6 +81,13 @@ def extras(cfg,raw):
                 if any(not isinstance(c,int) or isinstance(c,bool) or c<0 for c in counts):raise ValueError('Nombre de LED par segment : entier positif ou nul')
                 if sum(counts)!=r['end']-r['start']+1:raise ValueError(t['name']+' : le total des LED du plan doit correspondre à la plage de la zone')
             r['path_counts']=counts
+        autonomous=[r for r in t['routes'] if r.get('source')=='wled_preset']
+        if autonomous:
+            if len(t['routes'])!=1:
+                raise ValueError(t['name']+' : un preset WLED autonome doit être la seule source de cet éclairage')
+            r=autonomous[0]
+            if r['start']!=1 or r['end']!=t['count']:
+                raise ValueError(t['name']+' : le preset WLED autonome doit couvrir tout le ruban')
 
     cfg['profiles']=copy.deepcopy(raw.get('profiles',[]))
     if not isinstance(cfg['profiles'],list) or len(cfg['profiles'])>20:raise ValueError('20 profils maximum')
