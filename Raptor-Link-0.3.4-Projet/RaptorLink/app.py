@@ -202,6 +202,10 @@ class App:
                             app.engagement.never_rating();result={'ok':True}
                         else:raise ValueError('Action de notation inconnue.')
                     elif self.path=='/api/feedback':result=app.open_feedback(data)
+                    elif self.path=='/api/diagnostic-report':
+                        minutes=int(data.get('minutes',30))
+                        if minutes not in [5,30,120,1440,0]:raise ValueError('Durée de rapport invalide.')
+                        result={'text':app.engine.diagnostic_report(minutes)}
                     elif self.path=='/api/check-update':
                         if app.engine.config['settings'].get('check_updates',True):
                             app.update_info=find_update(APP_VERSION)
