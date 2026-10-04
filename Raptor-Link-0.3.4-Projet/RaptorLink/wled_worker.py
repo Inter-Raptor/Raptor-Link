@@ -21,6 +21,9 @@ def _packets(pixels,timeout=2):
 
 class WledWorker:
     RELEASE_SETTLE_SECONDS=0.18
+    HTTP_TIMEOUT_SECONDS=1.2
+    HTTP_RETRY_BASE_SECONDS=15.0
+    HTTP_RETRY_MAX_SECONDS=60.0
 
     def __init__(self,target,logger,diagnostics=None):
         self.lock=threading.RLock()
@@ -42,6 +45,8 @@ class WledWorker:
         self.retries=0
         self.commanded_off=False
         self.next_http_try=0.0
+        self.pending_confirmation=False
+        self.fallback_batches=0
         self.released_rev=-1
         self.release_packets=0
         self.udp_commands=0
@@ -67,6 +72,7 @@ class WledWorker:
             if payload!=self.desired:
                 self.desired=payload
                 self.desired_rev+=1
+                self.pending_confirmation=False
                 if changed:self.transitions+=1
         if changed:self._event("detailed","WLED-STATE",f"{self.target['name']} -> {mode}",reason=reason,ip=self.target["ip"])
 
@@ -101,6 +107,9 @@ class WledWorker:
                 "retries":self.retries,
                 "commanded_off":self.commanded_off,
                 "control_path":self.control_path,
+                "http_retry_in":round(max(0.0,self.next_http_try-time.monotonic()),2),
+                "pending_confirmation":self.pending_confirmation,
+                "fallback_batches":self.fallback_batches,
                 "release_packets":self.release_packets,
                 "udp_commands":self.udp_commands,
             }
@@ -110,8 +119,25 @@ class WledWorker:
             try:self.diag.event(level,category,message,**fields)
             except Exception:pass
 
-    def _http(self,payload,timeout=2):
+    def _http_success(self):
+        with self.lock:
+            self.last_http_ok=time.time()
+            self.last_http_error=""
+            self.retries=0
+            self.next_http_try=0.0
+
+    def _http_failure(self,exc):
+        msg=str(exc)
+        with self.lock:
+            self.last_http_error=msg
+            self.retries+=1
+            delay=min(self.HTTP_RETRY_MAX_SECONDS,self.HTTP_RETRY_BASE_SECONDS*(2**min(8,self.retries-1)))
+            self.next_http_try=time.monotonic()+delay
+        return msg,delay
+
+    def _http(self,payload,timeout=None):
         target=copy.deepcopy(self.target)
+        timeout=self.HTTP_TIMEOUT_SECONDS if timeout is None else max(.2,float(timeout))
         req=urllib.request.Request(
             "http://"+target["ip"]+"/json/state",
             data=json.dumps(payload,separators=(",",":")).encode(),
@@ -120,16 +146,58 @@ class WledWorker:
         try:
             with self.http.open(req,timeout=timeout) as r:
                 data=json.load(r)
-            with self.lock:
-                self.last_http_ok=time.time();self.last_http_error="";self.retries=0
+            self._http_success()
             self._event("detailed","WLED-HTTP",f"{target['name']} commande OK",ip=target["ip"],payload=payload)
             return data
         except Exception as exc:
-            msg=str(exc)
-            with self.lock:
-                self.last_http_error=msg;self.retries+=1
-            self._event("normal","WLED-HTTP",f"{target['name']} erreur HTTP",ip=target["ip"],error=msg,payload=payload)
+            msg,delay=self._http_failure(exc)
+            self._event("normal","WLED-HTTP",f"{target['name']} erreur HTTP",ip=target["ip"],error=msg,payload=payload,retry_in=round(delay,1))
             raise
+
+    def _http_state(self,timeout=.8):
+        """Lightweight recovery probe used only after the HTTP circuit cooldown."""
+        target=copy.deepcopy(self.target)
+        req=urllib.request.Request("http://"+target["ip"]+"/json/state")
+        try:
+            with self.http.open(req,timeout=max(.2,float(timeout))) as r:
+                data=json.load(r)
+            self._http_success()
+            return data if isinstance(data,dict) else {}
+        except Exception as exc:
+            msg,delay=self._http_failure(exc)
+            self._event("normal","WLED-HTTP",f"{target['name']} toujours indisponible",ip=target["ip"],error=msg,retry_in=round(delay,1))
+            raise
+
+    def _matches_desired(self,mode,payload,state):
+        if not isinstance(state,dict):return False
+        if mode=="off":
+            return state.get("on") is False
+        if mode=="preset":
+            try:return bool(state.get("on")) and int(state.get("ps",-1))==int(payload.get("ps",-2))
+            except Exception:return False
+        if mode=="restore":
+            if "on" in payload and bool(state.get("on"))!=bool(payload.get("on")):return False
+            if "bri" in payload:
+                try:
+                    if int(state.get("bri",-1))!=int(payload.get("bri")):return False
+                except Exception:return False
+            # Segment/transition restoration is richer than a cheap equality test.
+            return "seg" not in payload
+        return False
+
+    def _apply_control(self,payload):
+        """Apply one state change without ever hammering a sick WLED web server."""
+        if time.monotonic()>=self.next_http_try:
+            try:
+                self._http(payload)
+                self.control_path="http"
+                return "http"
+            except Exception:
+                pass
+        if self._udp_state(payload):
+            self.control_path="udp-json-fallback"
+            return "udp"
+        return ""
 
     def _command_payload(self,d):
         transition=max(0,min(650,int(round(float(d.get("transition",0))*10))))
@@ -176,6 +244,7 @@ class WledWorker:
         target=copy.deepcopy(self.target)
         data=json.dumps(payload,separators=(",",":"),ensure_ascii=False).encode("utf-8")
         ok=True
+        self.fallback_batches+=1
         for _ in range(3):
             try:
                 self.udp.sendto(data,(target["ip"],int(target.get("port",21324))))
@@ -211,13 +280,20 @@ class WledWorker:
                 # A failed HTTP call must never block realtime output: WLED also accepts
                 # JSON state commands over its UDP notifier port.
                 if self.commanded_off:
-                    try:
-                        self.state="WAKING";self.detail="Rallumage WLED"
-                        self._release_realtime()
-                        self._http({"live":False,"on":True,"tt":0})
-                        self.control_path="http"
-                    except Exception:
-                        self._udp_state({"live":False,"on":True,"tt":0})
+                    self.state="WAKING";self.detail="Rallumage WLED"
+                    self._release_realtime()
+                    wake={"live":False,"on":True,"tt":0}
+                    if time.monotonic()>=self.next_http_try:
+                        try:
+                            self._http(wake)
+                            self.control_path="http"
+                        except Exception:
+                            self._udp_state(wake);self.control_path="udp-json-fallback"
+                    else:
+                        self._udp_state(wake);self.control_path="udp-json-fallback"
+                    # Realtime UDP itself can wake a strip through WLED's briLast path,
+                    # so a sick HTTP server must never block the stream.
+                    self.pending_confirmation=False
                     self.commanded_off=False
                     self.applied_rev=rev
                 if frame:
@@ -251,20 +327,15 @@ class WledWorker:
 
             if rev!=self.applied_rev:
                 payload=self._command_payload(d)
-                used_fallback=False
-                try:
-                    self.state="APPLYING";self.detail=d.get("reason","Commande WLED")
-                    self._http(payload)
-                    self.control_path="http"
-                except Exception:
-                    # Do not hammer the ESP web server for minutes. WLED supports the
-                    # same JSON state object over UDP on the notifier port.
-                    used_fallback=self._udp_state(payload)
-                    if not used_fallback:
-                        self.state="CONTROL_ERROR";self.detail=self.last_http_error or "Commande WLED impossible"
-                        self.done.wait(1)
-                        previous_mode=mode
-                        continue
+                self.state="APPLYING";self.detail=d.get("reason","Commande WLED")
+                path=self._apply_control(payload)
+                if not path:
+                    self.state="CONTROL_ERROR";self.detail=self.last_http_error or "Commande WLED impossible"
+                    self.done.wait(1)
+                    previous_mode=mode
+                    continue
+                used_fallback=path!="http"
+                self.pending_confirmation=used_fallback
                 self.applied_rev=rev
                 if mode=="off":
                     self.commanded_off=True;self.state="OFF_UDP" if used_fallback else "OFF"
@@ -273,6 +344,33 @@ class WledWorker:
                 else:
                     self.commanded_off=not bool(payload.get("on",True));self.state="RESTORED_UDP" if used_fallback else "RESTORED"
                 self.detail=d.get("reason","")
+
+            # UDP fallback is fire-and-forget. If the controller was actually offline,
+            # resend the desired state only after an exponential cooldown and confirm
+            # it through HTTP when the web server becomes healthy again.
+            if rev==self.applied_rev and self.pending_confirmation and mode in ("off","preset","restore") and now>=self.next_http_try:
+                payload=self._command_payload(d)
+                try:
+                    self.state="VERIFYING";self.detail="Vérification de la récupération WLED"
+                    remote=self._http_state(.8)
+                    if not self._matches_desired(mode,payload,remote):
+                        self._http(payload)
+                    self.pending_confirmation=False
+                    self.control_path="http-recovered"
+                    if mode=="off":self.state="OFF"
+                    elif mode=="preset":self.state="AUTONOMOUS"
+                    else:self.state="RESTORED"
+                    self.detail=d.get("reason","")
+                    self._event("normal","WLED-HTTP",f"{self.target['name']} communication HTTP rétablie",ip=self.target["ip"])
+                except Exception:
+                    # One UDP refresh per cooldown keeps the desired state convergent
+                    # without recreating the old 2-second HTTP retry storm.
+                    self._udp_state(payload)
+                    self.control_path="udp-json-fallback"
+                    if mode=="off":self.state="OFF_UDP"
+                    elif mode=="preset":self.state="AUTONOMOUS_UDP"
+                    else:self.state="RESTORED_UDP"
+                    self.detail=d.get("reason","")+" · secours UDP"
             previous_mode=mode
             self.done.wait(.05)
 
