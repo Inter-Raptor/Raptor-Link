@@ -12,6 +12,7 @@ The format is based on a simple version history intended for GitHub Releases.
 - HTTP failure no longer blocks a realtime iCUE stream from waking and resuming.
 - Diagnostics now expose the control path used (HTTP or UDP fallback), release packet count and UDP state-command count.
 - Added regression coverage for the forced realtime release and HTTP-to-UDP fallback.
+- Hardware validation is required before merge.
 
 ## 0.4.0 Core 2 Beta
 
