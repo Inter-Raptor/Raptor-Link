@@ -15,6 +15,13 @@ from wled_worker import WledWorker
 def target():
     return {'name':'Logo','ip':'192.168.1.80','count':12,'port':21324}
 
+def wait_for(predicate, timeout=1.0):
+    end=time.monotonic()+timeout
+    while time.monotonic()<end:
+        if predicate():return True
+        time.sleep(.01)
+    return bool(predicate())
+
 class Core2(unittest.TestCase):
     def test_wled_preset_must_be_single_full_strip_source(self):
         cfg={'targets':[dict(target(),enabled=True,brightness=100,idle_seconds=None,on_stop='off',preset=1,routes=[
@@ -35,7 +42,7 @@ class Core2(unittest.TestCase):
             try:
                 w.RELEASE_SETTLE_SECONDS=.03
                 w.stream([(1,2,3)]*12,25,'test')
-                time.sleep(.14)
+                self.assertTrue(wait_for(lambda:len(sent)>1))
                 self.assertGreater(len(sent),1)
                 self.assertEqual(calls,[])
             finally:w.close()
@@ -48,13 +55,11 @@ class Core2(unittest.TestCase):
             try:
                 w.RELEASE_SETTLE_SECONDS=.03
                 w.stream([(10,20,30)]*12,25,'stream')
-                time.sleep(.08)
+                self.assertTrue(wait_for(lambda:len(sent)>0))
                 w.preset(12,'autonome',1)
-                time.sleep(.15)
-                self.assertTrue(any(p.get('ps')==12 and p.get('live') is False for p in calls))
+                self.assertTrue(wait_for(lambda:any(p.get('ps')==12 and p.get('live') is False for p in calls)))
                 w.off('idle',2)
-                time.sleep(.12)
-                self.assertTrue(any(p.get('on') is False and p.get('live') is False for p in calls))
+                self.assertTrue(wait_for(lambda:any(p.get('on') is False and p.get('live') is False for p in calls)))
             finally:w.close()
 
     def test_http_failure_uses_udp_json_fallback_once(self):
@@ -70,7 +75,7 @@ class Core2(unittest.TestCase):
             try:
                 w.RELEASE_SETTLE_SECONDS=.02
                 w.preset(9,'autonome',0)
-                time.sleep(.16)
+                self.assertTrue(wait_for(lambda:len(udp_payloads)==1))
                 snap=w.snapshot()
                 self.assertEqual(len(http_calls),1)
                 self.assertEqual(len(udp_payloads),1)
@@ -88,7 +93,7 @@ class Core2(unittest.TestCase):
                 w.RELEASE_SETTLE_SECONDS=.02
                 w.next_http_try=time.monotonic()+60
                 w.preset(11,'autonome',0)
-                time.sleep(.14)
+                self.assertTrue(wait_for(lambda:len(udp_payloads)==1))
                 snap=w.snapshot()
                 self.assertEqual(http_calls,[])
                 self.assertEqual(len(udp_payloads),1)
@@ -105,9 +110,11 @@ class Core2(unittest.TestCase):
             w=WledWorker(target(),lambda *a,**k:None,None)
             try:
                 w.RELEASE_SETTLE_SECONDS=.02
-                w.next_http_try=time.monotonic()+.06
+                w.next_http_try=time.monotonic()+60
                 w.preset(9,'autonome',0)
-                time.sleep(.18)
+                self.assertTrue(wait_for(lambda:len(udp_payloads)==1))
+                with w.lock:w.next_http_try=time.monotonic()
+                self.assertTrue(wait_for(lambda:bool(probes)))
                 snap=w.snapshot()
                 self.assertEqual(len(udp_payloads),1)
                 self.assertTrue(probes)
