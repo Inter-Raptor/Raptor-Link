@@ -193,6 +193,11 @@ class WledWorker:
                 self.control_path="http"
                 return "http"
             except Exception:
+                # Keep the circuit open even if a future/custom HTTP transport
+                # raises before _http_failure() can record the failure.
+                with self.lock:
+                    if self.next_http_try<=time.monotonic():
+                        self.next_http_try=time.monotonic()+self.HTTP_RETRY_BASE_SECONDS
                 pass
         if self._udp_state(payload):
             self.control_path="udp-json-fallback"
