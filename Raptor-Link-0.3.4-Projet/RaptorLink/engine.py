@@ -21,9 +21,11 @@ import urllib.request
 from cue_base import Cue, Device, Filter, Position, Color, check, Idle, sources
 from openrgb_source import OpenRGBWorker
 from msi_source import MsiWorker, install_official_sdk, sdk_status
+from wled_worker import WledWorker
+from diagnostics import Diagnostics
 
 HTTP=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True,'experimental_rgb':False},'targets':[]}
+DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True,'experimental_rgb':False,'diagnostic_level':'normal','diagnostic_days':7,'diagnostic_max_mb':50},'targets':[]}
 
 def address(value):
     ip=ipaddress.ip_address(value)
@@ -47,6 +49,10 @@ def validate(raw):
         if not lo<=s[key]<=hi: raise ValueError('Réglage hors limites : '+key)
     for k in ['lock_off','auto_sync','startup','check_updates','experimental_rgb']: s[k]=bool(s.get(k,True if k=='check_updates' else False))
     if s['language'] not in ['fr','en']: s['language']='fr'
+    s['diagnostic_level']=str(s.get('diagnostic_level','normal'))
+    if s['diagnostic_level'] not in ['off','normal','detailed','trace']:s['diagnostic_level']='normal'
+    s['diagnostic_days']=max(1,min(30,int(s.get('diagnostic_days',7))))
+    s['diagnostic_max_mb']=max(5,min(500,int(s.get('diagnostic_max_mb',50))))
     targets=raw.get('targets',[])
     if not isinstance(targets,list) or len(targets)>32: raise ValueError('32 éclairages maximum')
     seen=set()
