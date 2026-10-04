@@ -362,6 +362,10 @@ class Engine:
         self.want_run=False
     def shutdown(self):
         self.want_run=False;self.done.set();self.thread.join(timeout=15)
+        # restore() is requested by the engine loop during shutdown. Give the
+        # per-WLED workers enough time to leave realtime mode and apply OFF /
+        # preset / restore before terminating them.
+        if self.wled_workers:time.sleep(2.4)
         for w in list(self.wled_workers.values()):
             try:w.close()
             except Exception:pass
