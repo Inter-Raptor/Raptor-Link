@@ -33,7 +33,7 @@ class Core2(unittest.TestCase):
              patch.object(WledWorker,'_send_frame',lambda self,frame:sent.append(frame) or True):
             w=WledWorker(target(),lambda *a,**k:None,None)
             try:
-                w.RELEASE_SECONDS=.05
+                w.RELEASE_SETTLE_SECONDS=.03
                 w.stream([(1,2,3)]*12,25,'test')
                 time.sleep(.14)
                 self.assertGreater(len(sent),1)
@@ -46,7 +46,7 @@ class Core2(unittest.TestCase):
              patch.object(WledWorker,'_send_frame',lambda self,frame:sent.append(frame) or setattr(self,'last_udp',time.monotonic()) or True):
             w=WledWorker(target(),lambda *a,**k:None,None)
             try:
-                w.RELEASE_SECONDS=.05
+                w.RELEASE_SETTLE_SECONDS=.03
                 w.stream([(10,20,30)]*12,25,'stream')
                 time.sleep(.08)
                 w.preset(12,'autonome',1)
@@ -55,6 +55,28 @@ class Core2(unittest.TestCase):
                 w.off('idle',2)
                 time.sleep(.12)
                 self.assertTrue(any(p.get('on') is False and p.get('live') is False for p in calls))
+            finally:w.close()
+
+    def test_http_failure_uses_udp_json_fallback_once(self):
+        http_calls=[];udp_payloads=[];releases=[]
+        def broken_http(self,payload,timeout=2):
+            http_calls.append(payload.copy())
+            self.last_http_error='timed out'
+            raise TimeoutError('timed out')
+        with patch.object(WledWorker,'_http',broken_http), \
+             patch.object(WledWorker,'_release_realtime',lambda self:releases.append(True) or True), \
+             patch.object(WledWorker,'_udp_state',lambda self,payload:udp_payloads.append(payload.copy()) or setattr(self,'control_path','udp-json-fallback') or True):
+            w=WledWorker(target(),lambda *a,**k:None,None)
+            try:
+                w.RELEASE_SETTLE_SECONDS=.02
+                w.preset(9,'autonome',0)
+                time.sleep(.16)
+                snap=w.snapshot()
+                self.assertEqual(len(http_calls),1)
+                self.assertEqual(len(udp_payloads),1)
+                self.assertTrue(releases)
+                self.assertEqual(udp_payloads[0]['ps'],9)
+                self.assertEqual(snap['state'],'AUTONOMOUS_UDP')
             finally:w.close()
 
     def test_diagnostics_persistent_copyable_report(self):
