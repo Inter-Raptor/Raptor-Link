@@ -20,7 +20,7 @@ def _packets(pixels,timeout=2):
     return out
 
 class WledWorker:
-    RELEASE_SECONDS=2.15
+    RELEASE_SETTLE_SECONDS=0.18
 
     def __init__(self,target,logger,diagnostics=None):
         self.lock=threading.RLock()
@@ -42,6 +42,10 @@ class WledWorker:
         self.retries=0
         self.commanded_off=False
         self.next_http_try=0.0
+        self.released_rev=-1
+        self.release_packets=0
+        self.udp_commands=0
+        self.control_path=""
         self.udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         self.udp.settimeout(.2)
         self.http=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -96,6 +100,9 @@ class WledWorker:
                 "transitions":self.transitions,
                 "retries":self.retries,
                 "commanded_off":self.commanded_off,
+                "control_path":self.control_path,
+                "release_packets":self.release_packets,
+                "udp_commands":self.udp_commands,
             }
 
     def _event(self,level,category,message,**fields):
@@ -150,6 +157,37 @@ class WledWorker:
             self._event("normal","WLED-UDP",f"{target['name']} erreur UDP",ip=target["ip"],error=str(exc))
             return False
 
+    def _release_realtime(self):
+        """Force WLED out of UDP realtime mode, even if this process did not start it."""
+        target=copy.deepcopy(self.target)
+        ok=True
+        for _ in range(3):
+            try:
+                self.udp.sendto(bytes([2,0]),(target["ip"],int(target.get("port",21324))))
+                self.release_packets+=1
+            except OSError as exc:
+                ok=False;self.last_udp_error=str(exc)
+            time.sleep(.025)
+        self._event("detailed","WLED-UDP",f"{target['name']} sortie realtime demandée",ip=target["ip"],packets=3,ok=ok)
+        return ok
+
+    def _udp_state(self,payload):
+        """Fallback to WLED's JSON API over the notifier UDP port when HTTP is unavailable."""
+        target=copy.deepcopy(self.target)
+        data=json.dumps(payload,separators=(",",":"),ensure_ascii=False).encode("utf-8")
+        ok=True
+        for _ in range(3):
+            try:
+                self.udp.sendto(data,(target["ip"],int(target.get("port",21324))))
+                self.udp_commands+=1
+            except OSError as exc:
+                ok=False;self.last_udp_error=str(exc)
+            time.sleep(.03)
+        if ok:
+            self.control_path="udp-json-fallback"
+            self._event("normal","WLED-UDP",f"{target['name']} commande JSON envoyée par UDP (secours)",ip=target["ip"],payload=payload)
+        return ok
+
     def _loop(self):
         next_udp=0.0
         next_trace=0.0
@@ -169,17 +207,19 @@ class WledWorker:
 
             if mode=="stream":
                 frame=d.get("frame")
-                # Only wake explicitly when this worker previously issued OFF.
+                # If Raptor Link itself previously switched this WLED off, wake it.
+                # A failed HTTP call must never block realtime output: WLED also accepts
+                # JSON state commands over its UDP notifier port.
                 if self.commanded_off:
-                    if now>=self.next_http_try:
-                        try:
-                            self.state="WAKING";self.detail="Rallumage WLED"
-                            self._http({"live":False,"on":True,"tt":0})
-                            self.commanded_off=False
-                            self.applied_rev=rev
-                        except Exception:
-                            self.next_http_try=now+1
-                            self.done.wait(.05);continue
+                    try:
+                        self.state="WAKING";self.detail="Rallumage WLED"
+                        self._release_realtime()
+                        self._http({"live":False,"on":True,"tt":0})
+                        self.control_path="http"
+                    except Exception:
+                        self._udp_state({"live":False,"on":True,"tt":0})
+                    self.commanded_off=False
+                    self.applied_rev=rev
                 if frame:
                     interval=1/max(1,int(d.get("fps",25)))
                     if now>=next_udp:
@@ -198,35 +238,41 @@ class WledWorker:
                 self.done.wait(.005)
                 continue
 
-            # Autonomous preset / OFF / restore: first stop realtime packets and
-            # let WLED's official 1-2 s realtime timeout expire. No periodic HTTP
-            # request is made while streaming.
-            elapsed=now-self.last_udp if self.last_udp else 999
-            if previous_mode=="stream" or elapsed<self.RELEASE_SECONDS:
-                self.state="RELEASING"
-                self.detail="Sortie du mode temps réel"
+            # Autonomous preset / OFF / restore: force-release realtime first.
+            # This is done even if *this* process did not start realtime mode, which
+            # also recovers a WLED left in live mode by an older Raptor Link session.
+            if rev!=self.applied_rev and self.released_rev!=rev:
+                self.state="RELEASING";self.detail="Sortie forcée du mode temps réel"
+                self._release_realtime()
+                self.released_rev=rev
                 previous_mode=mode
-                self.done.wait(min(.05,max(.01,self.RELEASE_SECONDS-elapsed)))
+                self.done.wait(self.RELEASE_SETTLE_SECONDS)
                 continue
 
-            if rev!=self.applied_rev and now>=self.next_http_try:
+            if rev!=self.applied_rev:
                 payload=self._command_payload(d)
+                used_fallback=False
                 try:
-                    self.state="APPLYING"
-                    self.detail=d.get("reason","Commande WLED")
+                    self.state="APPLYING";self.detail=d.get("reason","Commande WLED")
                     self._http(payload)
-                    self.applied_rev=rev
-                    if mode=="off":
-                        self.commanded_off=True;self.state="OFF"
-                    elif mode=="preset":
-                        self.commanded_off=False;self.state="AUTONOMOUS"
-                    else:
-                        self.commanded_off=not bool(payload.get("on",True));self.state="RESTORED"
-                    self.detail=d.get("reason","")
+                    self.control_path="http"
                 except Exception:
-                    self.state="HTTP_RETRY"
-                    self.detail=self.last_http_error or "Nouvelle tentative"
-                    self.next_http_try=now+min(8,max(1,self.retries))
+                    # Do not hammer the ESP web server for minutes. WLED supports the
+                    # same JSON state object over UDP on the notifier port.
+                    used_fallback=self._udp_state(payload)
+                    if not used_fallback:
+                        self.state="CONTROL_ERROR";self.detail=self.last_http_error or "Commande WLED impossible"
+                        self.done.wait(1)
+                        previous_mode=mode
+                        continue
+                self.applied_rev=rev
+                if mode=="off":
+                    self.commanded_off=True;self.state="OFF_UDP" if used_fallback else "OFF"
+                elif mode=="preset":
+                    self.commanded_off=False;self.state="AUTONOMOUS_UDP" if used_fallback else "AUTONOMOUS"
+                else:
+                    self.commanded_off=not bool(payload.get("on",True));self.state="RESTORED_UDP" if used_fallback else "RESTORED"
+                self.detail=d.get("reason","")
             previous_mode=mode
             self.done.wait(.05)
 
