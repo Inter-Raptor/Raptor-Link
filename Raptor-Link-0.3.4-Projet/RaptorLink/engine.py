@@ -435,7 +435,7 @@ class Engine:
     def loop(self):
         import colorsys
         self.udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);self.udp.settimeout(.2)
-        pool=ThreadPoolExecutor(max_workers=8);pending={};health={};next_probe={}
+        pool=ThreadPoolExecutor(max_workers=4);pending={};restore_probe_done=set()
         self.capture=Capture();last_frame=time.monotonic();last_error=''
         if not self.demo:
             self.icue=IcueWorker(self.log)
@@ -459,7 +459,7 @@ class Engine:
                             self.openrgb.close();self.openrgb=None;self.openrgb_notice=False
                     if self.running and (not self.want_run or self.run_revision!=self.revision):
                         for f in pending.values():f.cancel()
-                        pending={};self.restore();health={};next_probe={}
+                        pending={};restore_probe_done=set();self.restore()
                     cue_state={};msi_state={};openrgb_state={}
                     if not self.demo:
                         self.idle=idle.seconds();self.is_locked=idle.locked()
@@ -539,78 +539,95 @@ class Engine:
                     states={};frames={};self.plan_frame=[]
                     if self.running:
                         for t in self.active:
-                            ip=t['ip']
-                            # A slow/unreachable WLED never blocks another one's UDP stream.
-                            if ip in pending and pending[ip].done():
+                            ip=t['ip'];worker=None if self.demo else self.worker(t)
+
+                            # The normal realtime path performs no periodic HTTP health
+                            # polling. Only targets configured to restore their previous
+                            # state get one best-effort snapshot at the beginning.
+                            if t['on_stop']=='restore' and ip in pending and pending[ip].done():
                                 try:
                                     original=pending.pop(ip).result()
-                                    if original is not None and ip not in self.original:self.original[ip]=original
-                                    health[ip]='ok'
-                                    next_probe[ip]=start+30
+                                    if original is not None:self.original[ip]=original
+                                    self.log(t['name']+' : état initial mémorisé','WLED-HTTP','detailed',ip=ip)
                                 except Exception as e:
-                                    msg=str(e)
-                                    if health.get(ip)!=msg:self.log(t['name']+' : '+msg)
-                                    health[ip]=msg
-                                    # Startup Wi-Fi/WLED availability can lag behind Windows.
-                                    # Retry quickly, but do not stop the realtime UDP stream.
-                                    next_probe[ip]=start+2
-                            if ip not in pending and start>=next_probe.get(ip,0):
-                                pending[ip]=pool.submit(probe_target,t,ip not in self.original,self.demo)
-                            http_issue=health.get(ip)
-                            errors=[]
-                            source_missing=False
+                                    pending.pop(ip,None)
+                                    self.log(t['name']+' : état initial indisponible ('+str(e)+')','WLED-HTTP','detailed',ip=ip)
+                            if not self.demo and t['on_stop']=='restore' and ip not in self.original and ip not in pending and ip not in restore_probe_done:
+                                restore_probe_done.add(ip);pending[ip]=pool.submit(probe_target,t,True,False)
+
+                            errors=[];source_missing=False
                             for i,r in enumerate(t['routes']):
                                 if r['source'] in ('msi','openrgb') and not experimental:
-                                    errors.append('Association '+str(i+1)+' : source RGB expérimentale désactivée')
+                                    errors.append('Association '+str(i+1)+' : source RGB expérimentale désactivée');source_missing=True
                                 elif r['source'] in ('icue','msi','openrgb') and (not r['ids'] or any(x not in colors.get(r['device'],{}) for x in r['ids'])):
-                                    errors.append('Association '+str(i+1)+' : appareil ou LED indisponibles')
-                                    source_missing=True
+                                    errors.append('Association '+str(i+1)+' : appareil ou LED indisponibles');source_missing=True
                             if not self.demo and on_screen_missing(t,self.capture):
-                                errors.append('Écran indisponible : vérifiez la sélection dans la zone')
-                                source_missing=True
+                                errors.append('Écran indisponible : vérifiez la sélection dans la zone');source_missing=True
                             if not t['routes']:errors.append('Ajoutez une association')
+
                             due=due_alarm(t,now,self.alarm_seen)
                             if due is not None:
                                 try:
                                     alarm_file=self.path.with_name('alarms-fired.json');tmp=alarm_file.with_suffix('.tmp');tmp.write_text(json.dumps(self.alarm_seen));os.replace(tmp,alarm_file)
-                                except OSError as e:self.log('Mémorisation du réveil : '+str(e))
+                                except OSError as e:self.log('Mémorisation du réveil : '+str(e),'AUTOMATION')
                                 if window(t['schedule'],now):self.alarms[ip]=(start+due['duration'],copy.deepcopy(due))
-                            end,alarm=self.alarms.get(ip,(0,None))
-                            alarm_on=start<end
+                            alarm_end,alarm=self.alarms.get(ip,(0,None));alarm_on=start<alarm_end
                             on,label=gate(t,self.run_settings,now,self.idle,self.is_locked,self.keep_awake,alarm_on)
+                            gate_state=(bool(on),label)
+                            if self.gate_states.get(ip)!=gate_state:
+                                previous=self.gate_states.get(ip);self.gate_states[ip]=gate_state
+                                self.log(t['name']+' : '+label,'PRESENCE','detailed',ip=ip,on=bool(on),idle=round(self.idle,1),locked=self.is_locked,previous=previous)
+
                             testing=start<self.tests.get(ip,0) and on
-                            # Do not replace the current WLED effect with black while iCUE,
-                            # screen capture or another source is still starting. Once we
-                            # have a valid frame, keep the last one during a short source
-                            # interruption instead of making the strip blink.
+                            autonomous=len(t['routes'])==1 and t['routes'][0].get('source')=='wled_preset'
+
+                            # A source that is still booting never sends a black frame.
+                            # The independent WLED worker keeps its previous output.
                             if source_missing and on and not alarm_on and not testing:
                                 if ip not in self.frames:
+                                    if worker:worker.hold('En attente de la source')
                                     states[ip]=('; '.join(errors)+' · ' if errors else '')+'En attente de la source…'
-                                    if http_issue and http_issue!='ok':states[ip]+=' · API WLED en attente'
                                     frames[ip]=[]
                                     continue
-                                frame=copy.deepcopy(self.frames[ip])
-                                label='Source en reconnexion'
+                                frame=copy.deepcopy(self.frames[ip]);label='Source en reconnexion'
+                                autonomous=False
+                            elif autonomous and not alarm_on and not testing:
+                                preset=t['routes'][0].get('wled_preset',1)
+                                if self.demo:
+                                    states[ip]=label+' · Preset WLED '+str(preset);frames[ip]=[]
+                                elif on:
+                                    worker.preset(preset,label,self.run_settings.get('fade_in',0))
+                                    ws=worker.snapshot();states[ip]=label+' · '+ws['state']+' · preset '+str(preset);frames[ip]=[]
+                                else:
+                                    worker.off(label,self.run_settings.get('fade_out',0))
+                                    ws=worker.snapshot();states[ip]=label+' · '+ws['state'];frames[ip]=[]
+                                continue
                             else:
                                 frame=render(t,colors,start,self.capture.screen,self.capture.level,self.history,dt)
+
                             if alarm_on and on:
-                                frame=effect(alarm['effect'],t['count'],start-(end-alarm['duration']));frame=[tuple(round(c*t['brightness']/100) for c in x) for x in frame];label='Réveil : '+alarm['name']
+                                frame=effect(alarm['effect'],t['count'],start-(alarm_end-alarm['duration']))
+                                frame=[tuple(round(c*t['brightness']/100) for c in x) for x in frame];label='Réveil : '+alarm['name']
                             if testing:
                                 frame=[(100,100,100) if int(start*4)%2 else (0,0,0)]*t['count'];label='Identification'
+
                             fade=self.fades.setdefault(ip,Fade())
-                            # Hard time boundary; presence and manual transitions may fade.
                             if label=='Hors horaires':fade.value=0
                             gain=fade.step(on,dt,self.run_settings['fade_in'],self.run_settings['fade_out'])
                             if on:self.frames[ip]=frame
                             elif gain>0:frame=self.frames.get(ip,frame)
                             frame=[tuple(round(v*gain) for v in c) for c in frame]
-                            if not self.demo:
-                                try:
-                                    for packet in packets(frame):self.udp.sendto(packet,(ip,t['port']))
-                                except OSError as e:health[ip]=str(e);next_probe[ip]=0
-                            states[ip]=('; '.join(errors) if errors and on and not alarm_on else label)
-                            if http_issue and http_issue!='ok':
-                                states[ip]+=' · API WLED en attente (UDP actif)'
+
+                            if worker:
+                                if on or gain>0:
+                                    worker.stream(frame,self.run_settings.get('fps',25),label)
+                                else:
+                                    worker.off(label,0)
+                                ws=worker.snapshot()
+                                states[ip]=('; '.join(errors) if errors and on and not alarm_on else label)+' · '+ws['state']
+                            else:
+                                states[ip]=('; '.join(errors) if errors and on and not alarm_on else label)
+
                             if ip==self.plan_ip:self.plan_frame=frame
                             frames[ip]=frame[::max(1,len(frame)//200)]
                     self.target_status=states;self.previews=frames
