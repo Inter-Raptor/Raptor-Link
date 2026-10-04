@@ -271,29 +271,62 @@ class Engine:
         self.config=validate(DEFAULT);self.devices=[];self.colors={};self.logs=[];self.active=[];self.original={}
         self.want_run=False;self.running=False;self.keep_awake=False;self.status='Démarrage';self.icue=None;self.msi=None;self.openrgb=None;self.icue_notice=False;self.msi_notice=False;self.openrgb_notice=False;self.loop_heartbeat=time.monotonic()
         self.plan_ip='';self.plan_frame=[];self.preview_device='';self.idle=0;self.is_locked=False;self.target_status={};self.revision=0;self.scan_requested=True
+        config_error=''
         try:
             if path.exists(): self.config=validate(json.loads(path.read_text(encoding='utf-8')))
-        except Exception as e: self.log('Configuration non chargée : '+str(e))
+        except Exception as e: config_error='Configuration non chargée : '+str(e)
+        ds=self.config['settings']
+        self.diag=Diagnostics(path.parent/'diagnostics',ds.get('diagnostic_level','normal'),ds.get('diagnostic_days',7),ds.get('diagnostic_max_mb',50))
+        self.wled_workers={}
         self.want_run=self.config['settings']['auto_sync']
-        self.tests={};self.fades={};self.history={};self.frames={};self.alarm_seen={};self.alarms={};self.previews={}
+        self.tests={};self.fades={};self.history={};self.frames={};self.alarm_seen={};self.alarms={};self.previews={};self.gate_states={}
+        if config_error:self.log(config_error,'CONFIG')
         try:self.alarm_seen=json.loads(path.with_name('alarms-fired.json').read_text())
         except Exception:pass
+        self.diag.event('normal','ENGINE','Raptor Link Core 2 démarré',demo=self.demo,auto_sync=self.want_run)
         self.thread=threading.Thread(target=self.loop,daemon=True);self.thread.start()
-    def log(self,msg):
+    def log(self,msg,category='ENGINE',level='normal',**fields):
         with self.lock:
             self.logs.append(time.strftime('%H:%M:%S')+'  '+str(msg));self.logs=self.logs[-80:]
+        try:self.diag.event(level,category,str(msg),**fields)
+        except Exception:pass
+    def worker(self,target):
+        ip=target['ip']
+        w=self.wled_workers.get(ip)
+        if w is None and not self.demo:
+            w=WledWorker(target,self.log,self.diag);self.wled_workers[ip]=w
+            self.log(target['name']+' : worker WLED Core 2 créé','WLED-STATE','detailed',ip=ip)
+        elif w is not None:w.update_target(target)
+        return w
     def snapshot(self):
         with self.lock:
+            workers={ip:w.snapshot() for ip,w in self.wled_workers.items()}
             return copy.deepcopy({'devices':self.devices,'colors':self.colors,'running':self.running,'requested':self.want_run,
               'status':self.status,'logs':self.logs[-15:],'idle':int(self.idle),'locked':self.is_locked,'keep_awake':self.keep_awake,
-              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'engine_age':max(0,time.monotonic()-self.loop_heartbeat),'icue':self.icue.snapshot() if self.icue else {},'msi':self.msi.snapshot() if self.msi else {},'openrgb':self.openrgb.snapshot() if self.openrgb else {},'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
+              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'engine_age':max(0,time.monotonic()-self.loop_heartbeat),'icue':self.icue.snapshot() if self.icue else {},'msi':self.msi.snapshot() if self.msi else {},'openrgb':self.openrgb.snapshot() if self.openrgb else {},'wled_workers':workers,'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
+    def diagnostic_report(self,minutes=30):
+        state=self.snapshot()
+        context={
+            'running':state['running'],
+            'requested':state['requested'],
+            'status':state['status'],
+            'idle_seconds':state['idle'],
+            'locked':state['locked'],
+            'keep_awake':state['keep_awake'],
+            'icue_stalled':bool(state.get('icue',{}).get('stalled')),
+            'icue_restarts':state.get('icue',{}).get('restarts',0),
+            'targets':json.dumps(state.get('targets',{}),ensure_ascii=False),
+            'wled_workers':json.dumps(state.get('wled_workers',{}),ensure_ascii=False),
+        }
+        return self.diag.report(int(minutes),context)
     def save(self,cfg):
         cfg=validate(cfg)
         with self.lock:
             self.want_run=False
             temp=self.path.with_suffix('.tmp');temp.write_text(json.dumps(cfg,indent=2,ensure_ascii=False),encoding='utf-8');os.replace(temp,self.path)
             self.config=cfg;self.revision+=1
-        self.log('Configuration enregistrée. Relancez la synchronisation pour appliquer les associations.')
+        ds=cfg['settings'];self.diag.configure(ds.get('diagnostic_level'),ds.get('diagnostic_days'),ds.get('diagnostic_max_mb'))
+        self.log('Configuration enregistrée. Relancez la synchronisation pour appliquer les associations.','CONFIG')
     def msi_status(self):
         base=sdk_status(self.path.parent)
         if self.msi:
@@ -329,6 +362,12 @@ class Engine:
         self.want_run=False
     def shutdown(self):
         self.want_run=False;self.done.set();self.thread.join(timeout=15)
+        for w in list(self.wled_workers.values()):
+            try:w.close()
+            except Exception:pass
+        self.wled_workers.clear()
+        try:self.diag.close()
+        except Exception:pass
     def restore(self):
         for t in self.active:
             if self.demo or t['ip'] not in self.original: continue
