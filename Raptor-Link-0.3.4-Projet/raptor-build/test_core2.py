@@ -123,10 +123,10 @@ class Core2(unittest.TestCase):
                 d.event('normal','ENGINE','démarrage')
                 d.event('detailed','PRESENCE','Logo : Inactivité',idle=300)
                 time.sleep(.15)
-                report=d.report(30,{'version':'0.4.0'})
+                report=d.report(30,{'version':'0.4.1'})
                 self.assertIn('RAPTOR LINK',report)
                 self.assertIn('Logo : Inactivité',report)
-                self.assertIn('version: 0.4.0',report)
+                self.assertIn('version: 0.4.1',report)
             finally:d.close()
 
     def test_diagnostics_off_skips_writes(self):
