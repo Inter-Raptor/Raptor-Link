@@ -746,6 +746,9 @@ class Engine:
         self.want_run = False
         if self.running:
             self._stop_active()
+            # Give independent WLED workers time to release realtime and apply
+            # the final OFF/preset command before terminating their threads.
+            time.sleep(0.35)
         self.done.set()
         self.thread.join(timeout=3)
         for worker in list(self.workers.values()):
