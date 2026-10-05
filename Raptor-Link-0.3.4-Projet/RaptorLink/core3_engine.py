@@ -109,7 +109,9 @@ def validate(raw):
 
     s = cfg["settings"]
     s["idle_seconds"] = _int(s.get("idle_seconds", 300), 0, 86400, "Inactivité")
-    s["fps"] = _int(s.get("fps", 12), 1, 20, "FPS")
+    # Old Core 2 configurations allowed up to 40 FPS. Core 3 intentionally
+    # caps the migrated value instead of rejecting an otherwise valid config.
+    s["fps"] = max(1, min(20, int(s.get("fps", 12))))
     s["auto_sync"] = bool(s.get("auto_sync", False))
     s["startup"] = bool(s.get("startup", False))
     s["check_updates"] = bool(s.get("check_updates", True))
@@ -579,9 +581,9 @@ class Engine:
     def _supervisor(self):
         while not self.done.is_set():
             try:
-                self.engine_restarts += 1
                 self._loop()
             except Exception as exc:
+                self.engine_restarts += 1
                 self.status = "Récupération du moteur"
                 self.log("Moteur Core 3 relancé : " + str(exc), "ENGINE", "normal", restart=self.engine_restarts)
                 self.done.wait(0.5)
