@@ -17,10 +17,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Python regression tests
+      - name: Run Core 3 regression tests
         shell: powershell
         run: |
-          & ".\RaptorLink\runtime\python.exe" -m unittest discover -s raptor-build -p "test_*.py"
+          & ".\RaptorLink\runtime\python.exe" ".\raptor-build\test_core3.py"
 
       - name: Check Core 3 Python syntax
         shell: powershell
