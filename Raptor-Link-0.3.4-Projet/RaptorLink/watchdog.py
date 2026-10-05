@@ -62,13 +62,23 @@ def main():
     data = Path(sys.argv[2])
     root = Path(sys.argv[3])
     normal = data / ("normal-exit-" + str(pid) + ".flag")
+    state_file = data / ("watchdog-state-" + str(pid) + ".json")
     normal.unlink(missing_ok=True)
 
     _wait_process(pid)
 
     if normal.exists():
         normal.unlink(missing_ok=True)
+        state_file.unlink(missing_ok=True)
         return
+
+    resume_sync = False
+    try:
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        resume_sync = bool(state.get("requested") or state.get("running"))
+    except Exception:
+        pass
+    state_file.unlink(missing_ok=True)
     if not _allow_restart(data):
         return
 
@@ -77,8 +87,11 @@ def main():
     app = root / "app.py"
     if pythonw.exists() and app.exists():
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        command = [str(pythonw), str(app), "--background", "--recovered"]
+        if resume_sync:
+            command.append("--recover-sync")
         subprocess.Popen(
-            [str(pythonw), str(app), "--background", "--recovered"],
+            command,
             cwd=str(root),
             creationflags=flags,
         )
