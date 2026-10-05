@@ -18,8 +18,6 @@ import time
 import urllib.request
 
 from cue_base import Cue, Device, Filter, Position, Color, check, Idle, sources
-from openrgb_source import OpenRGBWorker
-from msi_source import MsiWorker, install_official_sdk, sdk_status
 
 HTTP=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True,'experimental_rgb':False},'targets':[]}
@@ -300,35 +298,10 @@ class Engine:
             self.config=cfg;self.revision+=1;self.want_run=requested
         self.log('Configuration enregistrée.')
     def msi_status(self):
-        base=sdk_status(self.path.parent)
-        if self.msi:
-            state=self.msi.snapshot()
-            base.update({
-                'worker_available':bool(state.get('available')),
-                'connected':bool(state.get('last_ok')),
-                'error':state.get('error',''),
-                'stalled':bool(state.get('stalled')),
-                'devices':len(state.get('devices',[])),
-                'diagnostic':copy.deepcopy(state.get('diagnostic',{})),
-                'restarts':state.get('restarts',0),
-                'last_ok':state.get('last_ok',0),
-            })
-        else:
-            base.update({'worker_available':False,'connected':False,'error':'','stalled':False,'devices':0,'diagnostic':{},'restarts':0,'last_ok':0})
-        return base
+        return {'supported':False,'worker_available':False,'connected':False,'error':'MSI connector is not available in this stable build.','stalled':False,'devices':0,'diagnostic':{},'restarts':0,'last_ok':0}
 
     def install_msi_sdk(self):
-        if self.msi:
-            self.msi.close()
-            self.msi=None
-            time.sleep(.15)
-        try:
-            path=install_official_sdk(self.path.parent)
-        finally:
-            if not self.demo and self.config['settings'].get('experimental_rgb') and self.msi is None:self.msi=MsiWorker(self.log,self.path.parent)
-        self.scan_requested=True
-        self.log('SDK MSI Mystic Light officiel installé pour Raptor Link : '+str(path))
-        return self.msi_status()
+        raise ValueError('MSI connector is not available in this stable build.')
 
     def stop(self):
         self.want_run=False
