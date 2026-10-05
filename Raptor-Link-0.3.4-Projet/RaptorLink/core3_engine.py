@@ -538,7 +538,8 @@ class Engine:
         ip = address(ip)
         if not any(t["ip"] == ip for t in self.config["targets"]):
             raise ValueError("Éclairage inconnu.")
-        self.tests[ip] = time.monotonic() + 3.0
+        now = time.monotonic()
+        self.tests[ip] = (now, now + 5.0)
 
     def _prepare(self):
         with self.lock:
@@ -660,7 +661,8 @@ class Engine:
                     on = self.keep_awake or not (delay and self.idle >= delay)
                     worker = None if self.demo else self.worker(target)
                     source = target.get("source", "icue")
-                    testing = started < self.tests.get(ip, 0)
+                    test_start, test_end = self.tests.get(ip, (0.0, 0.0))
+                    testing = test_start <= started < test_end
 
                     if not on:
                         if worker:
@@ -679,8 +681,23 @@ class Engine:
                         continue
 
                     if testing:
-                        frame = [(100, 100, 100) if int(started * 5) % 2 else (0, 0, 0)] * target["count"]
-                        reason = "Test"
+                        test_phase = int(max(0.0, started - test_start))
+                        if test_phase == 0:
+                            frame = [(255, 0, 0)] * target["count"]
+                            reason = "Test rouge"
+                        elif test_phase == 1:
+                            frame = [(0, 255, 0)] * target["count"]
+                            reason = "Test vert"
+                        elif test_phase == 2:
+                            frame = [(0, 0, 255)] * target["count"]
+                            reason = "Test bleu"
+                        elif test_phase == 3:
+                            frame = [(255, 255, 255)] * target["count"]
+                            reason = "Test blanc"
+                        else:
+                            frame = _rainbow(target["count"], started - test_start)
+                            reason = "Test arc-en-ciel"
+                        frame = _gain(frame, target["brightness"])
                     elif source == "rainbow":
                         frame = _gain(_rainbow(target["count"], started), target["brightness"])
                         reason = "Arc-en-ciel"
