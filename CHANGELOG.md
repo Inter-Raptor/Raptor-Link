@@ -4,6 +4,24 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.5.0 Core 3 Stable Test
+
+- Rebuilt the runtime around a deliberately small Core 3 path instead of adding more recovery logic to Core 2.
+- Normal operation now focuses on iCUE -> WLED, autonomous WLED presets, a simple rainbow source and a static color source.
+- Removed screen capture, audio reactions, alarms, profiles, MSI/OpenRGB, smoothing and multi-source routing from the Core 3 runtime and UI.
+- Each WLED has one independent self-recovering UDP worker. A worker exception is contained and automatically restarted without taking down the engine.
+- The main engine is supervised and restarts its loop after an unexpected exception while WLED workers keep their last requested state.
+- Added a separate Windows watchdog process that relaunches Raptor Link after an unexpected application exit, with a crash-loop limit.
+- Realtime WLED traffic is deduplicated: unchanged RGB frames are not resent at the selected FPS. A low-rate heartbeat keeps realtime mode alive.
+- Core 3 caps realtime output at 20 FPS and defaults to 12 FPS; 8 FPS is available for difficult Wi-Fi networks.
+- HTTP is removed from the realtime/control hot path. ON/OFF/preset changes use small redundant JSON-over-UDP commands and are reinforced only at a low rate.
+- Inactivity detection returns to Windows GetLastInputInfo only, removing cursor/key heuristics that could continually reset the idle timer.
+- Saving configuration no longer disables synchronization. Changes are applied live without an intentional OFF cycle for unchanged WLEDs.
+- If iCUE restarts or stalls, the last valid RGB frame is frozen instead of replacing the strip with random/black data; synchronization resumes automatically when iCUE returns.
+- Added a deterministic five-second transport test: red, green, blue, white, then rainbow.
+- Diagnostics now include sampled RGB values actually sent to each WLED, frame counts, deduplicated-frame counts and worker restart counts.
+- Old Core 2 configurations are migrated automatically to the simplified one-source-per-WLED model.
+
 ## 0.4.1 Core 2 Beta
 
 - Fixed the first real-hardware issue found with autonomous WLED presets: some controllers could remain stuck in realtime UDP mode and stop answering the web/HTTP API.
