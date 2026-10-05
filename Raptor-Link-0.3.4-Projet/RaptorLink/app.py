@@ -265,5 +265,6 @@ if __name__=='__main__':
         (DATA/'erreur.txt').write_text(traceback.format_exc(),encoding='utf-8')
         if sys.platform=='win32':
             import ctypes
-            ctypes.windll.user32.MessageBoxW(None,'Impossible de démarrer. Consultez '+str(DATA/'erreur.txt'),'Raptor Link',16)
+            ctypes.windll.user32.MessageBoxW(None,'Raptor Link a rencontré une erreur et va tenter de redémarrer. Détails : '+str(DATA/'erreur.txt'),'Raptor Link',16)
+            raise SystemExit(1)
         else:raise
