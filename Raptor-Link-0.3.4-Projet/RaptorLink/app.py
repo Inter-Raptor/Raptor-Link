@@ -337,17 +337,20 @@ class App:
         if "--background" not in sys.argv and "--headless" not in sys.argv:
             self.open()
 
+        normal_shutdown = False
         try:
             while not self.done.wait(0.5):
                 pass
+            normal_shutdown = True
         except KeyboardInterrupt:
-            pass
+            normal_shutdown = True
         finally:
-            # The watchdog checks this exact file after our PID exits.
-            try:
-                self.normal_exit_flag.write_text("normal", encoding="utf-8")
-            except Exception:
-                pass
+            # Only an explicit/normal exit suppresses watchdog recovery.
+            if normal_shutdown:
+                try:
+                    self.normal_exit_flag.write_text("normal", encoding="utf-8")
+                except Exception:
+                    pass
             try:
                 self.engine.shutdown()
             finally:
