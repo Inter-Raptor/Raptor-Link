@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 from features import extras, gate, window, effect, render, Fade, clock, due_alarm
 from capture import Capture
 from screens import screen_key
-from activity import Presence
 import ctypes as C
 import copy
 import ipaddress
@@ -45,7 +44,8 @@ def validate(raw):
     for key,lo,hi in [('fps',1,40),('idle_seconds',0,86400)]:
         s[key]=int(s[key])
         if not lo<=s[key]<=hi: raise ValueError('Réglage hors limites : '+key)
-    for k in ['lock_off','auto_sync','startup','check_updates','experimental_rgb']: s[k]=bool(s.get(k,True if k=='check_updates' else False))
+    for k in ['lock_off','auto_sync','startup','check_updates']: s[k]=bool(s.get(k,True if k=='check_updates' else False))
+    s['experimental_rgb']=False
     if s['language'] not in ['fr','en']: s['language']='fr'
     targets=raw.get('targets',[])
     if not isinstance(targets,list) or len(targets)>32: raise ValueError('32 éclairages maximum')
@@ -120,8 +120,13 @@ def probe_target(t,initialize=False,demo=False):
     if info.get('leds',{}).get('count')!=t['count']:raise ValueError('Nombre de LED différent : utilisez Vérifier.')
     if not initialize:return None
     st=http(t['ip'],'/json/state')
-    http(t['ip'],'/json/state',{'on':False,'transition':0})
     return {k:st[k] for k in ['on','bri','transition','mainseg','seg'] if k in st}
+
+def udp_json(sock,t,payload,repeat=2):
+    raw=json.dumps(payload,separators=(',',':')).encode()
+    for i in range(max(1,int(repeat))):
+        sock.sendto(raw,(t['ip'],t['port']))
+        if i+1<repeat:time.sleep(.02)
 
 class GenericCue(Cue):
     def scan(self):
@@ -243,19 +248,27 @@ class IcueWorker:
                 process=None;retry_at=time.monotonic()+1
         self._dispose(process)
 
-class WinIdle(Presence):
+class WinIdle:
+    class Info(C.Structure):_fields_=[('size',C.c_uint32),('tick',C.c_uint32)]
     def __init__(self):
-        super().__init__()
+        self.user=C.WinDLL('user32',use_last_error=True);self.kernel=C.WinDLL('kernel32',use_last_error=True)
+        self.user.GetLastInputInfo.argtypes=[C.POINTER(self.Info)];self.user.GetLastInputInfo.restype=C.c_int
+        self.kernel.GetTickCount.argtypes=[];self.kernel.GetTickCount.restype=C.c_uint32
         self.user.OpenInputDesktop.argtypes=[C.c_uint32,C.c_int,C.c_uint32]
         self.user.OpenInputDesktop.restype=C.c_void_p
         self.user.CloseDesktop.argtypes=[C.c_void_p]
         self.user.SwitchDesktop.argtypes=[C.c_void_p]
         self.user.SwitchDesktop.restype=C.c_int
+    def seconds(self):
+        info=self.Info(C.sizeof(self.Info),0)
+        if not self.user.GetLastInputInfo(C.byref(info)):return 0
+        elapsed=((self.kernel.GetTickCount()-info.tick)&0xffffffff)/1000
+        return 0 if elapsed>7*86400 else elapsed
     def locked(self):
         handle=self.user.OpenInputDesktop(0,False,0x0100)
-        if not handle: return True
-        try: return not bool(self.user.SwitchDesktop(handle))
-        finally: self.user.CloseDesktop(handle)
+        if not handle:return True
+        try:return not bool(self.user.SwitchDesktop(handle))
+        finally:self.user.CloseDesktop(handle)
 
 class Engine:
     def __init__(self,path,demo=False):
@@ -282,10 +295,10 @@ class Engine:
     def save(self,cfg):
         cfg=validate(cfg)
         with self.lock:
-            self.want_run=False
+            requested=self.want_run
             temp=self.path.with_suffix('.tmp');temp.write_text(json.dumps(cfg,indent=2,ensure_ascii=False),encoding='utf-8');os.replace(temp,self.path)
-            self.config=cfg;self.revision+=1
-        self.log('Configuration enregistrée. Relancez la synchronisation pour appliquer les associations.')
+            self.config=cfg;self.revision+=1;self.want_run=requested
+        self.log('Configuration enregistrée.')
     def msi_status(self):
         base=sdk_status(self.path.parent)
         if self.msi:
@@ -323,22 +336,22 @@ class Engine:
         self.want_run=False;self.done.set();self.thread.join(timeout=15)
     def restore(self):
         for t in self.active:
-            if self.demo or t['ip'] not in self.original: continue
+            if self.demo:continue
             try:
                 self.udp.sendto(bytes([2,0]),(t['ip'],t['port']))
-                if not window(t['schedule'],datetime.datetime.now()): payload={'on':False,'transition':0}
-                elif t['on_stop']=='restore': payload=self.original.get(t['ip'],{'on':False})
-                elif t['on_stop']=='preset': payload={'ps':t['preset']}
-                else: payload={'on':False,'transition':0}
-                http(t['ip'],'/json/state',payload)
-            except Exception as e: self.log(t['name']+' : restauration impossible ('+str(e)+')')
+                if not window(t['schedule'],datetime.datetime.now()):payload={'on':False,'tt':0}
+                elif t['on_stop']=='restore':payload=self.original.get(t['ip'],{'on':False,'tt':0})
+                elif t['on_stop']=='preset':payload={'on':True,'ps':t['preset'],'tt':0}
+                else:payload={'on':False,'tt':0}
+                udp_json(self.udp,t,payload,2)
+            except Exception as e:self.log(t['name']+' : commande de sortie impossible ('+str(e)+')')
         self.active=[];self.original={};self.running=False;self.target_status={}
     def prepare(self):
         with self.lock:
             cfg=copy.deepcopy(self.config); revision=self.revision
         self.active=[t for t in cfg['targets'] if t['enabled']]
         self.run_revision=revision;self.run_settings=cfg['settings'];self.running=True
-        self.fades={};self.history={};self.frames={};self.target_status={};self.alarms={}
+        self.fades={};self.history={};self.frames={};self.target_status={};self.alarms={};self.sent_cache={};self.last_send={};self.output_mode={}
         self.log('Synchronisation démarrée : chaque éclairage est traité indépendamment.')
     def identify(self,ip):
         t=next((t for t in self.config['targets'] if t['ip']==ip),None)
@@ -384,11 +397,7 @@ class Engine:
         self.udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);self.udp.settimeout(.2)
         pool=ThreadPoolExecutor(max_workers=8);pending={};health={};next_probe={}
         self.capture=Capture();last_frame=time.monotonic();last_error=''
-        if not self.demo:
-            self.icue=IcueWorker(self.log)
-            if self.config['settings'].get('experimental_rgb'):
-                self.msi=MsiWorker(self.log,self.path.parent)
-                self.openrgb=OpenRGBWorker(self.log)
+        if not self.demo:self.icue=IcueWorker(self.log)
         idle=None
         try:
             if not self.demo:idle=WinIdle()
@@ -396,14 +405,7 @@ class Engine:
             while not self.done.is_set():
                 start=time.monotonic();self.loop_heartbeat=start;dt=min(.2,start-last_frame);last_frame=start;now=datetime.datetime.now()
                 try:
-                    experimental=bool(self.config['settings'].get('experimental_rgb',False))
-                    if not self.demo:
-                        if experimental and self.msi is None:self.msi=MsiWorker(self.log,self.path.parent)
-                        if experimental and self.openrgb is None:self.openrgb=OpenRGBWorker(self.log)
-                        if not experimental and self.msi is not None:
-                            self.msi.close();self.msi=None;self.msi_notice=False
-                        if not experimental and self.openrgb is not None:
-                            self.openrgb.close();self.openrgb=None;self.openrgb_notice=False
+                    experimental=False
                     if self.running and (not self.want_run or self.run_revision!=self.revision):
                         for f in pending.values():f.cancel()
                         pending={};self.restore();health={};next_probe={}
@@ -449,10 +451,9 @@ class Engine:
                         msi_devices=copy.deepcopy(msi_state.get('devices',[]))
                         for d in msi_devices:d['provider']='msi'
                         self.devices=cue_devices+msi_devices+copy.deepcopy(openrgb_state.get('devices',[]))
-                        colors={}
-                        if not cue_state.get('stalled'):colors.update(cue_state.get('colors',{}))
-                        if not msi_state.get('stalled'):colors.update(msi_state.get('colors',{}))
-                        colors.update(openrgb_state.get('colors',{}))
+                        fresh=copy.deepcopy(cue_state.get('colors',{}))
+                        if fresh:self.colors=fresh
+                        colors=copy.deepcopy(self.colors)
                         if cue_state.get('stalled') and not self.icue_notice:
                             self.log('iCUE ne répond plus pendant '+cue_state.get('operation','une opération')+' ; le moteur WLED reste actif.')
                             self.icue_notice=True
@@ -498,10 +499,10 @@ class Engine:
                                     msg=str(e)
                                     if health.get(ip)!=msg:self.log(t['name']+' : '+msg)
                                     health[ip]=msg
-                                next_probe[ip]=start+8
-                            if ip not in pending and start>=next_probe.get(ip,0):pending[ip]=pool.submit(probe_target,t,health.get(ip)!='ok',self.demo)
-                            if health.get(ip)!='ok':
-                                states[ip]='Reconnexion…' if ip not in health else health[ip];continue
+                                next_probe[ip]=float('inf')
+                            if ip not in pending and start>=next_probe.get(ip,0):
+                                pending[ip]=pool.submit(probe_target,t,ip not in self.original,self.demo)
+                                next_probe[ip]=float('inf')
                             errors=[]
                             for i,r in enumerate(t['routes']):
                                 if r['source'] in ('msi','openrgb') and not experimental:
@@ -533,8 +534,23 @@ class Engine:
                             frame=[tuple(round(v*gain) for v in c) for c in frame]
                             if not self.demo:
                                 try:
-                                    for packet in packets(frame):self.udp.sendto(packet,(ip,t['port']))
-                                except OSError as e:health[ip]=str(e);next_probe[ip]=0
+                                    if not on and gain<=0:
+                                        if self.output_mode.get(ip)!='off':
+                                            # Send one final black frame before leaving realtime,
+                                            # then reinforce OFF twice with very small UDP JSON packets.
+                                            for packet in packets([(0,0,0)]*t['count'],3):self.udp.sendto(packet,(ip,t['port']))
+                                            self.udp.sendto(bytes([2,0]),(ip,t['port']))
+                                            udp_json(self.udp,t,{'on':False,'tt':0},2)
+                                            self.output_mode[ip]='off';self.sent_cache.pop(ip,None);self.last_send.pop(ip,None)
+                                    else:
+                                        if self.output_mode.get(ip)!='stream':
+                                            udp_json(self.udp,t,{'on':True,'tt':0},1)
+                                            self.output_mode[ip]='stream'
+                                        raw=bytes(v for pixel in frame for v in pixel)
+                                        if raw!=self.sent_cache.get(ip) or start-self.last_send.get(ip,0)>=.9:
+                                            for packet in packets(frame,3):self.udp.sendto(packet,(ip,t['port']))
+                                            self.sent_cache[ip]=raw;self.last_send[ip]=start
+                                except OSError as e:self.log(t['name']+' : UDP '+str(e))
                             states[ip]=('; '.join(errors) if errors and on and not alarm_on else label)
                             if ip==self.plan_ip:self.plan_frame=frame
                             frames[ip]=frame[::max(1,len(frame)//200)]
