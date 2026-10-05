@@ -80,9 +80,13 @@ class App:
         self.done = threading.Event()
         self.tray = None
         self.normal_exit_flag = DATA / ("normal-exit-" + str(os.getpid()) + ".flag")
+        self.watchdog_state_file = DATA / ("watchdog-state-" + str(os.getpid()) + ".json")
         self.normal_exit_flag.unlink(missing_ok=True)
+        self.watchdog_state_file.unlink(missing_ok=True)
 
         self.engine = Engine(DATA / "config.json", DEMO)
+        if "--recover-sync" in sys.argv:
+            self.engine.want_run = True
         self.update_info = {"checked": False, "available": False, "error": ""}
         startup(self.engine.config["settings"]["startup"])
 
@@ -106,6 +110,7 @@ class App:
             encoding="utf-8",
         )
 
+        self._write_watchdog_state()
         self._start_watchdog()
 
         if self.engine.config["settings"].get("check_updates", True) and not DEMO:
@@ -114,6 +119,22 @@ class App:
                 daemon=True,
                 name="RaptorLink-update-check",
             ).start()
+
+    def _write_watchdog_state(self):
+        if DEMO:
+            return
+        try:
+            temp = self.watchdog_state_file.with_suffix(".tmp")
+            temp.write_text(
+                json.dumps({
+                    "requested": bool(self.engine.want_run),
+                    "running": bool(self.engine.running),
+                }),
+                encoding="utf-8",
+            )
+            os.replace(temp, self.watchdog_state_file)
+        except Exception:
+            pass
 
     def _start_watchdog(self):
         if DEMO or sys.platform != "win32":
@@ -340,7 +361,8 @@ class App:
         normal_shutdown = False
         try:
             while not self.done.wait(0.5):
-                pass
+                self._write_watchdog_state()
+            self._write_watchdog_state()
             normal_shutdown = True
         except KeyboardInterrupt:
             normal_shutdown = True
@@ -358,6 +380,8 @@ class App:
                 if self.tray:
                     self.tray.stop()
                 INSTANCE.unlink(missing_ok=True)
+                if normal_shutdown:
+                    self.watchdog_state_file.unlink(missing_ok=True)
 
 
 def main():
