@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 from features import extras, gate, window, effect, render, Fade, clock, due_alarm
 from capture import Capture
 from screens import screen_key
-from activity import Presence
 import ctypes as C
 import copy
 import ipaddress
@@ -19,8 +18,6 @@ import time
 import urllib.request
 
 from cue_base import Cue, Device, Filter, Position, Color, check, Idle, sources
-from openrgb_source import OpenRGBWorker
-from msi_source import MsiWorker, install_official_sdk, sdk_status
 
 HTTP=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True,'experimental_rgb':False},'targets':[]}
@@ -45,7 +42,8 @@ def validate(raw):
     for key,lo,hi in [('fps',1,40),('idle_seconds',0,86400)]:
         s[key]=int(s[key])
         if not lo<=s[key]<=hi: raise ValueError('Réglage hors limites : '+key)
-    for k in ['lock_off','auto_sync','startup','check_updates','experimental_rgb']: s[k]=bool(s.get(k,True if k=='check_updates' else False))
+    for k in ['lock_off','auto_sync','startup','check_updates']: s[k]=bool(s.get(k,True if k=='check_updates' else False))
+    s['experimental_rgb']=False
     if s['language'] not in ['fr','en']: s['language']='fr'
     targets=raw.get('targets',[])
     if not isinstance(targets,list) or len(targets)>32: raise ValueError('32 éclairages maximum')
@@ -243,25 +241,32 @@ class IcueWorker:
                 process=None;retry_at=time.monotonic()+1
         self._dispose(process)
 
-class WinIdle(Presence):
+class WinIdle:
+    class Info(C.Structure):_fields_=[('size',C.c_uint32),('tick',C.c_uint32)]
     def __init__(self):
-        super().__init__()
+        self.user=C.WinDLL('user32',use_last_error=True);self.kernel=C.WinDLL('kernel32',use_last_error=True)
+        self.user.GetLastInputInfo.argtypes=[C.POINTER(self.Info)];self.user.GetLastInputInfo.restype=C.c_int
+        self.kernel.GetTickCount.argtypes=[];self.kernel.GetTickCount.restype=C.c_uint32
         self.user.OpenInputDesktop.argtypes=[C.c_uint32,C.c_int,C.c_uint32]
         self.user.OpenInputDesktop.restype=C.c_void_p
         self.user.CloseDesktop.argtypes=[C.c_void_p]
         self.user.SwitchDesktop.argtypes=[C.c_void_p]
         self.user.SwitchDesktop.restype=C.c_int
+    def seconds(self):
+        info=self.Info(C.sizeof(self.Info),0)
+        if not self.user.GetLastInputInfo(C.byref(info)):return 0
+        elapsed=((self.kernel.GetTickCount()-info.tick)&0xffffffff)/1000
+        return 0 if elapsed>7*86400 else elapsed
     def locked(self):
         handle=self.user.OpenInputDesktop(0,False,0x0100)
-        if not handle: return True
-        try: return not bool(self.user.SwitchDesktop(handle))
-        finally: self.user.CloseDesktop(handle)
-
+        if not handle:return True
+        try:return not bool(self.user.SwitchDesktop(handle))
+        finally:self.user.CloseDesktop(handle)
 class Engine:
     def __init__(self,path,demo=False):
         self.path=path;self.demo=demo;self.lock=threading.RLock();self.done=threading.Event()
         self.config=validate(DEFAULT);self.devices=[];self.colors={};self.logs=[];self.active=[];self.original={}
-        self.want_run=False;self.running=False;self.keep_awake=False;self.status='Démarrage';self.icue=None;self.msi=None;self.openrgb=None;self.icue_notice=False;self.msi_notice=False;self.openrgb_notice=False;self.loop_heartbeat=time.monotonic()
+        self.want_run=False;self.running=False;self.keep_awake=False;self.status='Démarrage';self.icue=None;self.icue_notice=False;self.loop_heartbeat=time.monotonic()
         self.plan_ip='';self.plan_frame=[];self.preview_device='';self.idle=0;self.is_locked=False;self.target_status={};self.revision=0;self.scan_requested=True
         try:
             if path.exists(): self.config=validate(json.loads(path.read_text(encoding='utf-8')))
@@ -278,45 +283,15 @@ class Engine:
         with self.lock:
             return copy.deepcopy({'devices':self.devices,'colors':self.colors,'running':self.running,'requested':self.want_run,
               'status':self.status,'logs':self.logs[-15:],'idle':int(self.idle),'locked':self.is_locked,'keep_awake':self.keep_awake,
-              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'engine_age':max(0,time.monotonic()-self.loop_heartbeat),'icue':self.icue.snapshot() if self.icue else {},'msi':self.msi.snapshot() if self.msi else {},'openrgb':self.openrgb.snapshot() if self.openrgb else {},'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
+              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'engine_age':max(0,time.monotonic()-self.loop_heartbeat),'icue':self.icue.snapshot() if self.icue else {},'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
     def save(self,cfg):
         cfg=validate(cfg)
         with self.lock:
-            self.want_run=False
+            was_requested=self.want_run
             temp=self.path.with_suffix('.tmp');temp.write_text(json.dumps(cfg,indent=2,ensure_ascii=False),encoding='utf-8');os.replace(temp,self.path)
             self.config=cfg;self.revision+=1
-        self.log('Configuration enregistrée. Relancez la synchronisation pour appliquer les associations.')
-    def msi_status(self):
-        base=sdk_status(self.path.parent)
-        if self.msi:
-            state=self.msi.snapshot()
-            base.update({
-                'worker_available':bool(state.get('available')),
-                'connected':bool(state.get('last_ok')),
-                'error':state.get('error',''),
-                'stalled':bool(state.get('stalled')),
-                'devices':len(state.get('devices',[])),
-                'diagnostic':copy.deepcopy(state.get('diagnostic',{})),
-                'restarts':state.get('restarts',0),
-                'last_ok':state.get('last_ok',0),
-            })
-        else:
-            base.update({'worker_available':False,'connected':False,'error':'','stalled':False,'devices':0,'diagnostic':{},'restarts':0,'last_ok':0})
-        return base
-
-    def install_msi_sdk(self):
-        if self.msi:
-            self.msi.close()
-            self.msi=None
-            time.sleep(.15)
-        try:
-            path=install_official_sdk(self.path.parent)
-        finally:
-            if not self.demo and self.config['settings'].get('experimental_rgb') and self.msi is None:self.msi=MsiWorker(self.log,self.path.parent)
-        self.scan_requested=True
-        self.log('SDK MSI Mystic Light officiel installé pour Raptor Link : '+str(path))
-        return self.msi_status()
-
+            self.want_run=was_requested
+        self.log('Configuration enregistrée. Les changements sont appliqués automatiquement.')
     def stop(self):
         self.want_run=False
     def shutdown(self):
