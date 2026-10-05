@@ -23,7 +23,7 @@ def extras(cfg,raw):
     s['audio_output']=str(s.get('audio_output','default'))[:512]
     s['tutorial']=s.get('tutorial','ask') if s.get('tutorial','ask') in ['ask','never','done'] else 'ask'
     s['logo_animation']=bool(s.get('logo_animation',True))
-    s['experimental_rgb']=bool(s.get('experimental_rgb',False))
+    s['experimental_rgb']=False
     for t in cfg['targets']:
         sch=t.setdefault('schedule',{'enabled':False,'start':'08:00','end':'23:00','mode':'active','days':list(range(7))})
         clock(sch.get('start'));clock(sch.get('end'))
@@ -47,12 +47,13 @@ def extras(cfg,raw):
             if alarm.get('effect') not in ['rainbow','breathe','chase','solid']:raise ValueError('Effet réveil invalide')
         for r in t['routes']:
             r['source']=r.get('source','icue')
-            if r['source'] not in ['icue','msi','openrgb','rainbow','breathe','chase','solid','screen','audio']:raise ValueError('Source inconnue')
-            r['rgb_ecosystem']=str(r.get('rgb_ecosystem','openrgb'))[:32]
-            if r['rgb_ecosystem'] not in ['openrgb','msi','gigabyte','asus','razer','logitech','steelseries']:r['rgb_ecosystem']='openrgb'
-            # 0.3.7 represented MSI through OpenRGB. From 0.3.8, migrate that
-            # choice to the native MSI SDK connector automatically.
-            if r['source']=='openrgb' and r['rgb_ecosystem']=='msi':r['source']='msi'
+            if r['source'] in ['msi','openrgb']:
+                # Experimental vendor connectors are intentionally removed.
+                # Keep the route but require an iCUE reassociation instead of
+                # starting an unstable third-party worker.
+                r['source']='icue';r['device']='';r['ids']=[]
+            if r['source'] not in ['icue','rainbow','breathe','chase','solid','screen','audio']:raise ValueError('Source inconnue')
+            r['rgb_ecosystem']='icue'
             ids=r.get('screen_ids',['primary'])
             if not isinstance(ids,list) or not 1<=len(ids)<=32 or any(not isinstance(v,str) or not v or len(v)>128 for v in ids):raise ValueError('Sélectionnez au moins un écran pour la zone')
             ids=list(dict.fromkeys(ids))
