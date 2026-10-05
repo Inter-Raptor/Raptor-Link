@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.1 Classic Stable Beta
+
+- Restored the classic Raptor Link interface, navigation, branding and normal feature set.
+- Removed MSI Mystic Light, OpenRGB and the other experimental RGB connector runtime paths.
+- Legacy MSI/OpenRGB mappings are migrated to an empty iCUE mapping that must be reassigned instead of starting an experimental worker.
+- WLED realtime streaming is UDP-first: the HTTP API no longer decides whether RGB streaming is allowed to continue.
+- Removed periodic WLED HTTP health polling from the active RGB path. A WLED with a slow web API can continue receiving realtime colors.
+- Static frames are deduplicated and refreshed with a low-rate heartbeat instead of being resent at the selected FPS.
+- Inactivity now uses Windows GetLastInputInfo directly, without cursor/key heuristics that could continually reset the idle timer.
+- Once the fade reaches zero, inactivity becomes a real WLED OFF state and continuous black realtime packets stop. A tiny OFF reinforcement is sent every 30 seconds for weak Wi-Fi.
+- Active WLEDs receive a small wake reinforcement every 10 seconds so they recover automatically after a short network interruption.
+- If iCUE stalls or restarts, the last valid color frame is retained while the iCUE bridge recovers.
+- Saving configuration no longer leaves synchronization disabled. Unchanged WLEDs are reconfigured without a full OFF/ON cycle.
+- Normal stop/restore/preset commands use small redundant JSON-over-UDP control packets.
+- Added focused regression tests for classic UI preservation, connector removal, config migration and low-traffic WLED packets.
+
 All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
