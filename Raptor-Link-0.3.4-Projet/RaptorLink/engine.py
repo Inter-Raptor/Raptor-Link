@@ -233,8 +233,10 @@ class IcueWorker:
             while not self.done.is_set():
                 start=time.monotonic();self.loop_heartbeat=start;dt=min(.2,start-last_frame);last_frame=start;now=datetime.datetime.now()
                 try:
-                    if self.running and (not self.want_run or self.run_revision!=self.revision):
+                    if self.running and not self.want_run:
                         self.restore()
+                    elif self.running and self.run_revision!=self.revision:
+                        self.prepare()
                     cue_state={}
                     if not self.demo:
                         self.idle=idle.seconds();self.is_locked=idle.locked()
@@ -268,7 +270,9 @@ class IcueWorker:
                         cue_devices=copy.deepcopy(cue_state.get('devices',[]))
                         for d in cue_devices:d['provider']='icue'
                         self.devices=cue_devices
-                        colors={} if cue_state.get('stalled') else copy.deepcopy(cue_state.get('colors',{}))
+                        fresh_colors=copy.deepcopy(cue_state.get('colors',{}))
+                        if fresh_colors:self.colors=fresh_colors
+                        colors=copy.deepcopy(self.colors)
                         if cue_state.get('stalled') and not self.icue_notice:
                             self.log('iCUE ne répond plus ; la dernière image WLED reste active pendant la récupération.')
                             self.icue_notice=True
@@ -318,20 +322,30 @@ class IcueWorker:
                             frame=[tuple(round(v*gain) for v in pixel) for pixel in frame]
 
                             if not self.demo:
-                                # Wake/refresh is tiny and infrequent. No HTTP health gate:
-                                # if Wi-Fi comes back, the next UDP frame resumes immediately.
-                                if on and start-self.last_wake.get(ip,0)>=10:
-                                    udp_json(self.udp,ip,t['port'],{'on':True,'tt':0},1)
-                                    self.last_wake[ip]=start
-                                raw=bytes(v for pixel in frame for v in pixel)
-                                changed=raw!=self.sent_cache.get(ip)
-                                heartbeat=start-self.last_send.get(ip,0)>=.9
-                                if changed or heartbeat:
-                                    try:
-                                        for packet in packets(frame,3):self.udp.sendto(packet,(ip,t['port']))
-                                        self.sent_cache[ip]=raw;self.last_send[ip]=start
-                                    except OSError as e:
-                                        self.log(t['name']+' : UDP '+str(e))
+                                if not on and gain<=0:
+                                    # Inactivity is a real OFF state: no continuous black stream.
+                                    # A tiny reinforcement every 30 s covers a packet lost on weak Wi-Fi.
+                                    if self.output_mode.get(ip)!='off' or start-self.last_off.get(ip,0)>=30:
+                                        try:
+                                            for _ in range(2):self.udp.sendto(bytes([2,0]),(ip,t['port']))
+                                            udp_json(self.udp,ip,t['port'],{'on':False,'tt':0},2)
+                                            self.output_mode[ip]='off';self.last_off[ip]=start
+                                            self.sent_cache.pop(ip,None);self.last_send.pop(ip,None)
+                                        except OSError as e:self.log(t['name']+' : UDP '+str(e))
+                                else:
+                                    # Wake/refresh is tiny and infrequent. No HTTP health gate:
+                                    # after a Wi-Fi interruption, the next frame resumes by itself.
+                                    if self.output_mode.get(ip)!='stream' or start-self.last_wake.get(ip,0)>=10:
+                                        udp_json(self.udp,ip,t['port'],{'on':True,'tt':0},1)
+                                        self.output_mode[ip]='stream';self.last_wake[ip]=start
+                                    raw=bytes(v for pixel in frame for v in pixel)
+                                    changed=raw!=self.sent_cache.get(ip)
+                                    heartbeat=start-self.last_send.get(ip,0)>=.9
+                                    if changed or heartbeat:
+                                        try:
+                                            for packet in packets(frame,3):self.udp.sendto(packet,(ip,t['port']))
+                                            self.sent_cache[ip]=raw;self.last_send[ip]=start
+                                        except OSError as e:self.log(t['name']+' : UDP '+str(e))
 
                             states[ip]=('; '.join(errors) if errors and on and not alarm_on else label)
                             if ip==self.plan_ip:self.plan_frame=frame
