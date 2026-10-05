@@ -149,6 +149,7 @@ function renderDevices() {
 
 function renderGroups() {
   const device = currentDevice();
+  const previousGroup = $('group').value;
   const groups = new Map();
   for (const p of device?.positions || []) {
     const key = Number(p.group || 0);
@@ -157,6 +158,9 @@ function renderGroups() {
   $('group').innerHTML = [...groups.entries()].map(([group, count]) =>
     '<option value="' + group + '">Groupe ' + group + ' · ' + count + ' LED</option>'
   ).join('') || '<option value="">Aucun groupe</option>';
+  if ([...$('group').options].some(option => option.value === previousGroup)) {
+    $('group').value = previousGroup;
+  }
   $('selection').textContent = (target()?.ids?.length || 0) + ' LED iCUE sélectionnée(s)';
 }
 
