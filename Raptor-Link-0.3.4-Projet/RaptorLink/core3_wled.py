@@ -234,10 +234,10 @@ class WledWorker:
     def _supervisor(self):
         while not self.done.is_set():
             try:
-                self.restarts += 1
                 self._open_socket()
                 self._run()
             except Exception as exc:
+                self.restarts += 1
                 self.last_error = str(exc)
                 self.state = "RECOVERING"
                 self.detail = "Récupération du worker"
