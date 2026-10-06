@@ -323,6 +323,9 @@ class Engine:
             'keep_awake':state['keep_awake'],
             'icue_stalled':bool(state.get('icue',{}).get('stalled')),
             'icue_restarts':state.get('icue',{}).get('restarts',0),
+            'icue_color_updates':state.get('icue',{}).get('color_updates',0),
+            'icue_color_changes':state.get('icue',{}).get('color_changes',0),
+            'icue_color_change_age':state.get('icue',{}).get('color_change_age'),
             'targets':json.dumps(state.get('targets',{}),ensure_ascii=False),
             'wled_workers':json.dumps(state.get('wled_workers',{}),ensure_ascii=False),
         }
