@@ -65,7 +65,9 @@ def close_windows(title):
 
 
 class WindowController:
-    def __init__(self,focus,launch,close=None,clock=time.monotonic):
+    def __init__(self,focus,launch,clock=time.monotonic,close=None):
+        # clock remains the third positional argument for compatibility with
+        # the existing window lifecycle tests and older callers.
         self.focus=focus;self.launch=launch;self.close_window=close;self.clock=clock
         self.pending_until=0;self.lock=threading.Lock()
     def ready(self):
