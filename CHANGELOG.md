@@ -4,6 +4,37 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.4.1 Core 2 Beta
+
+- Fixed the first real-hardware issue found with autonomous WLED presets: some controllers could remain stuck in realtime UDP mode and stop answering the web/HTTP API.
+- Before every autonomous preset, OFF or restore command, Raptor Link now sends an explicit WLED realtime-release packet even if the current Raptor Link process did not start the realtime session.
+- Added a second control path using WLED's JSON API over UDP. If the HTTP API times out or returns 503, the requested preset/ON/OFF state is sent through the notifier UDP port instead of hammering the web server for minutes.
+- HTTP failure no longer blocks a realtime iCUE stream from waking and resuming.
+- Added an HTTP circuit breaker: after a timeout/503, that WLED is no longer hammered every few seconds. Retries back off from 15 s to 30 s and then 60 s while the other WLED workers continue normally.
+- UDP fallback is now treated as fire-and-forget rather than falsely confirmed. Raptor Link keeps a pending confirmation and converges the requested OFF/preset/restore state when the controller comes back online.
+- Recovery probes are lightweight and only happen after the cooldown. If the WLED already has the requested state, Raptor Link does not restart the preset unnecessarily.
+- Diagnostics now expose the control path, HTTP retry countdown, pending confirmation, fallback batch count, release packet count and UDP state-command count.
+- Added regression coverage for forced realtime release, HTTP-to-UDP fallback, circuit-breaker suppression and automatic HTTP recovery.
+- Hardware validation is required before merge.
+
+## 0.4.0 Core 2 Beta
+
+- Introduced one independent output worker per WLED controller.
+- Removed periodic WLED HTTP polling from active realtime streaming.
+- Added autonomous WLED preset mode for effects that do not need PC-side frame generation.
+- Added persistent asynchronous diagnostics with selectable levels, retention limits and a one-click copyable support report.
+- Kept iCUE/screen/audio sources in realtime mode while allowing simple effects to run directly on WLED.
+
+## 0.3.14 Beta
+
+- Fixed slow and unstable synchronization immediately after Windows startup.
+- WLED health probes are now strictly read-only: Raptor Link no longer switches a strip off while checking its HTTP API.
+- Realtime UDP output no longer waits for the WLED HTTP API to answer; colors can start as soon as the controller accepts UDP.
+- Failed startup probes retry quickly in the background without interrupting an already running realtime stream.
+- Raptor Link now waits for iCUE/screen source data before replacing the current WLED effect with black.
+- During a short source interruption, the last valid frame is kept instead of flashing black.
+- Increased the WLED realtime hold timeout from 2 s to 5 s to tolerate short Windows/iCUE/network stalls without visible blinking.
+
 ## 0.3.13 Beta
 
 - Restored the classic Raptor Link experience: the normal UI is again centered on **Corsair iCUE** and Raptor Link's own direct sources (screen, audio and local effects).

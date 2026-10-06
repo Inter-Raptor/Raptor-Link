@@ -264,6 +264,10 @@ These connectors are experimental, limited and may require extra vendor software
 
 Raptor Link keeps an in-app feedback center for questions, bugs, suggestions, comments and ratings. Users can prepare questions, bug reports, suggestions, ratings and hardware compatibility reports without exposing a GitHub token inside the application. The final report opens on GitHub pre-filled so the user can review it before submitting.
 
+### Startup stability
+
+Raptor Link starts its realtime WLED stream independently from the WLED HTTP API. This avoids long startup delays when Windows, Wi-Fi, iCUE or a WLED controller become ready at different times. Health checks stay read-only, and temporary source interruptions keep the last valid frame instead of flashing black.
+
 ## 🐛 Bugs, ideas and feedback
 
 Found a problem? Have an idea that would make Raptor Link better?

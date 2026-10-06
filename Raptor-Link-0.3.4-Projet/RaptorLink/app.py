@@ -63,8 +63,12 @@ class App:
         startup(self.engine.config['settings']['startup'])
         self.server=ThreadingHTTPServer(('127.0.0.1',0),self.handler())
         self.url='http://127.0.0.1:'+str(self.server.server_port)+'/#'+self.token
-        from window import WindowController,focus_window
-        self.window=WindowController(lambda:focus_window('Raptor Link · '+str(self.server.server_port)) if sys.platform=='win32' and not DEMO else False,self.launch_window)
+        from window import WindowController,focus_window,close_windows
+        self.window_title='Raptor Link · '+str(self.server.server_port)
+        self.window=WindowController(
+            lambda:focus_window(self.window_title) if sys.platform=='win32' and not DEMO else False,
+            self.launch_window,
+            close=lambda:close_windows(self.window_title) if sys.platform=='win32' and not DEMO else False)
         INSTANCE.write_text(json.dumps({'port':self.server.server_port,'token':self.token,'pid':os.getpid()}))
         if self.engine.config['settings'].get('check_updates',True) and not DEMO:
             threading.Thread(target=self.check_for_updates,daemon=True,name='RaptorLink-update-check').start()
@@ -156,6 +160,9 @@ class App:
                         app.engine.save(data)
                         if data['settings']['startup']!=previous: startup(data['settings']['startup'])
                     elif self.path=='/api/test':app.engine.identify(data['ip'])
+                    elif self.path=='/api/color-test':result=app.engine.color_diagnostic(data['ip'])
+                    elif self.path=='/api/reboot-wled':result=app.engine.reboot_wled(data['ip'])
+                    elif self.path=='/api/reboot-all-wled':result=app.engine.reboot_all_wled()
                     elif self.path=='/api/profile':app.engine.select_profile(data['index'])
                     elif self.path=='/api/tutorial':
                         with app.engine.lock:
@@ -202,6 +209,10 @@ class App:
                             app.engagement.never_rating();result={'ok':True}
                         else:raise ValueError('Action de notation inconnue.')
                     elif self.path=='/api/feedback':result=app.open_feedback(data)
+                    elif self.path=='/api/diagnostic-report':
+                        minutes=int(data.get('minutes',30))
+                        if minutes not in [5,30,120,1440,0]:raise ValueError('Durée de rapport invalide.')
+                        result={'text':app.engine.diagnostic_report(minutes)}
                     elif self.path=='/api/check-update':
                         if app.engine.config['settings'].get('check_updates',True):
                             app.update_info=find_update(APP_VERSION)
@@ -227,6 +238,11 @@ class App:
                     pystray.MenuItem('Profils',pystray.Menu(lambda: tuple(pystray.MenuItem(p['name'],(lambda index: lambda:self.engine.select_profile(index))(i)) for i,p in enumerate(self.engine.config.get('profiles',[]))))),
                     pystray.MenuItem('Démarrer',lambda:setattr(self.engine,'want_run',True)),
                     pystray.MenuItem('Arrêter la synchronisation',lambda:self.engine.stop()),
+                    pystray.MenuItem('Redémarrer tous les WLED',lambda:self.engine.reboot_all_wled()),
+                    pystray.MenuItem('WLED',pystray.Menu(lambda: tuple(
+                        pystray.MenuItem(t['name']+' · redémarrer',(lambda ip: lambda:self.engine.reboot_wled(ip))(t['ip']))
+                        for t in self.engine.config.get('targets',[])
+                    ))),
                     pystray.MenuItem('Garder allumé (inactivité)',lambda:setattr(self.engine,'keep_awake',not self.engine.keep_awake),checked=lambda item:self.engine.keep_awake),
                     pystray.MenuItem('Quitter',lambda:self.done.set())))
                 threading.Thread(target=self.tray.run,daemon=True).start()
@@ -241,7 +257,7 @@ class App:
                     self.tray.update_menu();tray_revision=self.engine.revision
         except KeyboardInterrupt:pass
         finally:
-            self.engagement.close();self.engine.shutdown();self.server.shutdown()
+            self.engagement.close();self.window.close();self.engine.shutdown();self.server.shutdown()
             if self.tray:self.tray.stop()
             INSTANCE.unlink(missing_ok=True)
 

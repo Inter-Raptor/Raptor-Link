@@ -21,9 +21,11 @@ import urllib.request
 from cue_base import Cue, Device, Filter, Position, Color, check, Idle, sources
 from openrgb_source import OpenRGBWorker
 from msi_source import MsiWorker, install_official_sdk, sdk_status
+from wled_worker import WledWorker
+from diagnostics import Diagnostics
 
 HTTP=urllib.request.build_opener(urllib.request.ProxyHandler({}))
-DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True,'experimental_rgb':False},'targets':[]}
+DEFAULT={'version':1,'settings':{'idle_seconds':300,'fps':25,'lock_off':True,'auto_sync':False,'startup':False,'language':'fr','check_updates':True,'experimental_rgb':False,'diagnostic_level':'normal','diagnostic_days':7,'diagnostic_max_mb':50},'targets':[]}
 
 def address(value):
     ip=ipaddress.ip_address(value)
@@ -47,6 +49,10 @@ def validate(raw):
         if not lo<=s[key]<=hi: raise ValueError('Réglage hors limites : '+key)
     for k in ['lock_off','auto_sync','startup','check_updates','experimental_rgb']: s[k]=bool(s.get(k,True if k=='check_updates' else False))
     if s['language'] not in ['fr','en']: s['language']='fr'
+    s['diagnostic_level']=str(s.get('diagnostic_level','normal'))
+    if s['diagnostic_level'] not in ['off','normal','detailed','trace']:s['diagnostic_level']='normal'
+    s['diagnostic_days']=max(1,min(30,int(s.get('diagnostic_days',7))))
+    s['diagnostic_max_mb']=max(5,min(500,int(s.get('diagnostic_max_mb',50))))
     targets=raw.get('targets',[])
     if not isinstance(targets,list) or len(targets)>32: raise ValueError('32 éclairages maximum')
     seen=set()
@@ -105,7 +111,7 @@ def render_target(target,colors):
     gain=target['brightness']/100
     return [tuple(round(v*gain) for v in c) for c in pixels]
 
-def packets(pixels,timeout=2):
+def packets(pixels,timeout=5):
     if len(pixels)<=490:
         return [bytes([2,timeout])+bytes(v for c in pixels for v in c)]
     output=[]
@@ -119,8 +125,10 @@ def probe_target(t,initialize=False,demo=False):
     info=http(t['ip'],'/json/info')
     if info.get('leds',{}).get('count')!=t['count']:raise ValueError('Nombre de LED différent : utilisez Vérifier.')
     if not initialize:return None
+    # Capture the state for a later restore, but never switch WLED off while
+    # probing. At Windows startup the network can be late and repeated probes
+    # must remain read-only or the strip visibly blinks.
     st=http(t['ip'],'/json/state')
-    http(t['ip'],'/json/state',{'on':False,'transition':0})
     return {k:st[k] for k in ['on','bri','transition','mainseg','seg'] if k in st}
 
 class GenericCue(Cue):
@@ -155,6 +163,7 @@ class IcueWorker:
         self.log=logger;self.lock=threading.RLock();self.done=threading.Event();self.process=None
         self.required=set();self.force_scan=True;self.interval=1/25;self.devices=[];self.colors={};self.error=''
         self.busy_since=None;self.operation='';self.last_progress=time.monotonic();self.last_ok=0;self.restarts=0
+        self.color_updates=0;self.color_changes=0;self.last_color_change=0.0
         self.command=command or self._default_command()
         self.thread=threading.Thread(target=self.loop,daemon=True,name='RaptorLink-iCUE-bridge');self.thread.start()
     def _default_command(self):
@@ -175,7 +184,9 @@ class IcueWorker:
                 kill=self.process
             state={'devices':copy.deepcopy(self.devices),'colors':copy.deepcopy(self.colors),'error':self.error,
                    'stalled':stalled,'operation':self.operation if stalled else '',
-                   'age':max(0,now-self.last_progress),'last_ok':self.last_ok,'restarts':self.restarts}
+                   'age':max(0,now-self.last_progress),'last_ok':self.last_ok,'restarts':self.restarts,
+                   'color_updates':self.color_updates,'color_changes':self.color_changes,
+                   'color_change_age':None if not self.last_color_change else max(0,now-self.last_color_change)}
         if kill is not None:
             try:kill.kill()
             except Exception:pass
@@ -208,7 +219,12 @@ class IcueWorker:
         with self.lock:
             if data is not None:
                 self.devices=copy.deepcopy(data.get('devices',[]))
-                self.colors={str(dev):{int(k):tuple(v) for k,v in vals.items()} for dev,vals in data.get('colors',{}).items()}
+                new_colors={str(dev):{int(k):tuple(v) for k,v in vals.items()} for dev,vals in data.get('colors',{}).items()}
+                if data.get('ok'):
+                    self.color_updates+=1
+                    if new_colors and new_colors!=self.colors:
+                        self.color_changes+=1;self.last_color_change=time.monotonic()
+                self.colors=new_colors
                 self.error=str(data.get('error',''));self.last_ok=time.monotonic() if data.get('ok') else self.last_ok
             if error is not None:self.error=str(error)
             self.last_progress=time.monotonic()
@@ -263,29 +279,62 @@ class Engine:
         self.config=validate(DEFAULT);self.devices=[];self.colors={};self.logs=[];self.active=[];self.original={}
         self.want_run=False;self.running=False;self.keep_awake=False;self.status='Démarrage';self.icue=None;self.msi=None;self.openrgb=None;self.icue_notice=False;self.msi_notice=False;self.openrgb_notice=False;self.loop_heartbeat=time.monotonic()
         self.plan_ip='';self.plan_frame=[];self.preview_device='';self.idle=0;self.is_locked=False;self.target_status={};self.revision=0;self.scan_requested=True
+        config_error=''
         try:
             if path.exists(): self.config=validate(json.loads(path.read_text(encoding='utf-8')))
-        except Exception as e: self.log('Configuration non chargée : '+str(e))
+        except Exception as e: config_error='Configuration non chargée : '+str(e)
+        ds=self.config['settings']
+        self.diag=Diagnostics(path.parent/'diagnostics',ds.get('diagnostic_level','normal'),ds.get('diagnostic_days',7),ds.get('diagnostic_max_mb',50))
+        self.wled_workers={}
         self.want_run=self.config['settings']['auto_sync']
-        self.tests={};self.fades={};self.history={};self.frames={};self.alarm_seen={};self.alarms={};self.previews={}
+        self.tests={};self.color_tests={};self.fades={};self.history={};self.frames={};self.alarm_seen={};self.alarms={};self.previews={};self.gate_states={}
+        if config_error:self.log(config_error,'CONFIG')
         try:self.alarm_seen=json.loads(path.with_name('alarms-fired.json').read_text())
         except Exception:pass
+        self.diag.event('normal','ENGINE','Raptor Link Core 2 démarré',demo=self.demo,auto_sync=self.want_run)
         self.thread=threading.Thread(target=self.loop,daemon=True);self.thread.start()
-    def log(self,msg):
+    def log(self,msg,category='ENGINE',level='normal',**fields):
         with self.lock:
             self.logs.append(time.strftime('%H:%M:%S')+'  '+str(msg));self.logs=self.logs[-80:]
+        try:self.diag.event(level,category,str(msg),**fields)
+        except Exception:pass
+    def worker(self,target):
+        ip=target['ip']
+        w=self.wled_workers.get(ip)
+        if w is None and not self.demo:
+            w=WledWorker(target,self.log,self.diag);self.wled_workers[ip]=w
+            self.log(target['name']+' : worker WLED Core 2 créé','WLED-STATE','detailed',ip=ip)
+        elif w is not None:w.update_target(target)
+        return w
     def snapshot(self):
         with self.lock:
+            workers={ip:w.snapshot() for ip,w in self.wled_workers.items()}
             return copy.deepcopy({'devices':self.devices,'colors':self.colors,'running':self.running,'requested':self.want_run,
               'status':self.status,'logs':self.logs[-15:],'idle':int(self.idle),'locked':self.is_locked,'keep_awake':self.keep_awake,
-              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'engine_age':max(0,time.monotonic()-self.loop_heartbeat),'icue':self.icue.snapshot() if self.icue else {},'msi':self.msi.snapshot() if self.msi else {},'openrgb':self.openrgb.snapshot() if self.openrgb else {},'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
+              'plan_ip':self.plan_ip,'plan_frame':self.plan_frame,'targets':self.target_status,'demo':self.demo,'revision':self.revision,'audio_level':self.capture.level if hasattr(self,'capture') else 0,'frames':self.previews,'engine_age':max(0,time.monotonic()-self.loop_heartbeat),'icue':self.icue.snapshot() if self.icue else {},'msi':self.msi.snapshot() if self.msi else {},'openrgb':self.openrgb.snapshot() if self.openrgb else {},'wled_workers':workers,'capture_error':' ; '.join(filter(None,[getattr(getattr(self,'capture',None),'error',''),getattr(getattr(self,'capture',None),'screen_error','')]))})
+    def diagnostic_report(self,minutes=30):
+        state=self.snapshot()
+        context={
+            'running':state['running'],
+            'requested':state['requested'],
+            'status':state['status'],
+            'idle_seconds':state['idle'],
+            'locked':state['locked'],
+            'keep_awake':state['keep_awake'],
+            'icue_stalled':bool(state.get('icue',{}).get('stalled')),
+            'icue_restarts':state.get('icue',{}).get('restarts',0),
+            'targets':json.dumps(state.get('targets',{}),ensure_ascii=False),
+            'wled_workers':json.dumps(state.get('wled_workers',{}),ensure_ascii=False),
+        }
+        return self.diag.report(int(minutes),context)
     def save(self,cfg):
         cfg=validate(cfg)
         with self.lock:
             self.want_run=False
             temp=self.path.with_suffix('.tmp');temp.write_text(json.dumps(cfg,indent=2,ensure_ascii=False),encoding='utf-8');os.replace(temp,self.path)
             self.config=cfg;self.revision+=1
-        self.log('Configuration enregistrée. Relancez la synchronisation pour appliquer les associations.')
+        ds=cfg['settings'];self.diag.configure(ds.get('diagnostic_level'),ds.get('diagnostic_days'),ds.get('diagnostic_max_mb'))
+        self.log('Configuration enregistrée. Relancez la synchronisation pour appliquer les associations.','CONFIG')
     def msi_status(self):
         base=sdk_status(self.path.parent)
         if self.msi:
@@ -321,25 +370,69 @@ class Engine:
         self.want_run=False
     def shutdown(self):
         self.want_run=False;self.done.set();self.thread.join(timeout=15)
+        # restore() is requested by the engine loop during shutdown. Give the
+        # per-WLED workers enough time to leave realtime mode and apply OFF /
+        # preset / restore before terminating them.
+        if self.wled_workers:time.sleep(2.4)
+        for w in list(self.wled_workers.values()):
+            try:w.close()
+            except Exception:pass
+        self.wled_workers.clear()
+        try:self.diag.close()
+        except Exception:pass
     def restore(self):
+        now=datetime.datetime.now()
         for t in self.active:
-            if self.demo or t['ip'] not in self.original: continue
+            if self.demo:continue
             try:
-                self.udp.sendto(bytes([2,0]),(t['ip'],t['port']))
-                if not window(t['schedule'],datetime.datetime.now()): payload={'on':False,'transition':0}
-                elif t['on_stop']=='restore': payload=self.original.get(t['ip'],{'on':False})
-                elif t['on_stop']=='preset': payload={'ps':t['preset']}
-                else: payload={'on':False,'transition':0}
-                http(t['ip'],'/json/state',payload)
-            except Exception as e: self.log(t['name']+' : restauration impossible ('+str(e)+')')
-        self.active=[];self.original={};self.running=False;self.target_status={}
+                w=self.worker(t)
+                if not window(t['schedule'],now):
+                    w.off('Hors horaires à l’arrêt',0)
+                elif t['on_stop']=='restore':
+                    w.restore(self.original.get(t['ip'],{'on':False}),'Rétablissement de l’état initial')
+                elif t['on_stop']=='preset':
+                    w.preset(t['preset'],'Preset WLED à l’arrêt',0)
+                else:
+                    w.off('Arrêt de la synchronisation',0)
+            except Exception as e:self.log(t['name']+' : restauration impossible ('+str(e)+')','WLED-STATE')
+        self.active=[];self.original={};self.running=False;self.target_status={};self.gate_states={}
     def prepare(self):
         with self.lock:
             cfg=copy.deepcopy(self.config); revision=self.revision
         self.active=[t for t in cfg['targets'] if t['enabled']]
         self.run_revision=revision;self.run_settings=cfg['settings'];self.running=True
-        self.fades={};self.history={};self.frames={};self.target_status={};self.alarms={}
-        self.log('Synchronisation démarrée : chaque éclairage est traité indépendamment.')
+        self.fades={};self.history={};self.frames={};self.target_status={};self.alarms={};self.gate_states={}
+        for t in self.active:
+            if not self.demo:self.worker(t).hold('Préparation de la synchronisation')
+        self.log('Synchronisation Core 2 démarrée : un worker indépendant par WLED.','ENGINE')
+    def reboot_wled(self,ip,reason="Redémarrage manuel"):
+        with self.lock:t=next((copy.deepcopy(t) for t in self.config['targets'] if t['ip']==ip),None)
+        if not t:raise ValueError('WLED inconnu.')
+        if self.demo:return {'ok':True,'queued':True,'name':t['name']}
+        queued=self.worker(t).reboot(reason)
+        self.log(t['name']+' : redémarrage WLED demandé','WLED-STATE','normal',ip=t['ip'])
+        return {'ok':True,'queued':bool(queued),'name':t['name']}
+
+    def reboot_all_wled(self):
+        with self.lock:targets=copy.deepcopy(self.config['targets'])
+        if self.demo:return {'ok':True,'count':len(targets)}
+        def sequence():
+            for t in targets:
+                if self.done.is_set():break
+                try:self.worker(t).reboot('Redémarrage global demandé')
+                except Exception as e:self.log(t['name']+' : redémarrage impossible ('+str(e)+')','WLED-STATE')
+                self.done.wait(.6)
+        threading.Thread(target=sequence,daemon=True,name='RaptorLink-WLED-reboot-all').start()
+        self.log('Redémarrage de tous les WLED demandé ('+str(len(targets))+')','WLED-STATE')
+        return {'ok':True,'count':len(targets)}
+
+    def color_diagnostic(self,ip):
+        t=next((t for t in self.active if t['ip']==ip),None)
+        if not self.running or not t:raise ValueError('Démarrez la synchronisation avant le diagnostic couleurs.')
+        now=time.monotonic();self.color_tests[ip]=(now,now+8.0)
+        self.log(t['name']+' : diagnostic couleurs rouge/vert/bleu/blanc démarré','WLED-STATE','normal',ip=ip)
+        return {'ok':True,'duration':8}
+
     def identify(self,ip):
         t=next((t for t in self.config['targets'] if t['ip']==ip),None)
         if not t:raise ValueError('Enregistrez cet éclairage avant le test.')
@@ -382,7 +475,7 @@ class Engine:
     def loop(self):
         import colorsys
         self.udp=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);self.udp.settimeout(.2)
-        pool=ThreadPoolExecutor(max_workers=8);pending={};health={};next_probe={}
+        pool=ThreadPoolExecutor(max_workers=4);pending={};restore_probe_done=set()
         self.capture=Capture();last_frame=time.monotonic();last_error=''
         if not self.demo:
             self.icue=IcueWorker(self.log)
@@ -406,7 +499,7 @@ class Engine:
                             self.openrgb.close();self.openrgb=None;self.openrgb_notice=False
                     if self.running and (not self.want_run or self.run_revision!=self.revision):
                         for f in pending.values():f.cancel()
-                        pending={};self.restore();health={};next_probe={}
+                        pending={};restore_probe_done=set();self.restore()
                     cue_state={};msi_state={};openrgb_state={}
                     if not self.demo:
                         self.idle=idle.seconds();self.is_locked=idle.locked()
@@ -486,56 +579,102 @@ class Engine:
                     states={};frames={};self.plan_frame=[]
                     if self.running:
                         for t in self.active:
-                            ip=t['ip']
-                            # A slow/unreachable WLED never blocks another one's UDP stream.
-                            if ip in pending and pending[ip].done():
+                            ip=t['ip'];worker=None if self.demo else self.worker(t)
+
+                            # The normal realtime path performs no periodic HTTP health
+                            # polling. Only targets configured to restore their previous
+                            # state get one best-effort snapshot at the beginning.
+                            if t['on_stop']=='restore' and ip in pending and pending[ip].done():
                                 try:
                                     original=pending.pop(ip).result()
-                                    if original is not None and ip not in self.original:self.original[ip]=original
-                                    if health.get(ip)!='ok':self.fades[ip]=Fade()
-                                    health[ip]='ok'
+                                    if original is not None:self.original[ip]=original
+                                    self.log(t['name']+' : état initial mémorisé','WLED-HTTP','detailed',ip=ip)
                                 except Exception as e:
-                                    msg=str(e)
-                                    if health.get(ip)!=msg:self.log(t['name']+' : '+msg)
-                                    health[ip]=msg
-                                next_probe[ip]=start+8
-                            if ip not in pending and start>=next_probe.get(ip,0):pending[ip]=pool.submit(probe_target,t,health.get(ip)!='ok',self.demo)
-                            if health.get(ip)!='ok':
-                                states[ip]='Reconnexion…' if ip not in health else health[ip];continue
-                            errors=[]
+                                    pending.pop(ip,None)
+                                    self.log(t['name']+' : état initial indisponible ('+str(e)+')','WLED-HTTP','detailed',ip=ip)
+                            if not self.demo and t['on_stop']=='restore' and ip not in self.original and ip not in pending and ip not in restore_probe_done:
+                                restore_probe_done.add(ip);pending[ip]=pool.submit(probe_target,t,True,False)
+
+                            errors=[];source_missing=False
                             for i,r in enumerate(t['routes']):
                                 if r['source'] in ('msi','openrgb') and not experimental:
-                                    errors.append('Association '+str(i+1)+' : source RGB expérimentale désactivée')
+                                    errors.append('Association '+str(i+1)+' : source RGB expérimentale désactivée');source_missing=True
                                 elif r['source'] in ('icue','msi','openrgb') and (not r['ids'] or any(x not in colors.get(r['device'],{}) for x in r['ids'])):
-                                    errors.append('Association '+str(i+1)+' : appareil ou LED indisponibles')
-                            if not self.demo and on_screen_missing(t,self.capture):errors.append('Écran indisponible : vérifiez la sélection dans la zone')
+                                    errors.append('Association '+str(i+1)+' : appareil ou LED indisponibles');source_missing=True
+                            if not self.demo and on_screen_missing(t,self.capture):
+                                errors.append('Écran indisponible : vérifiez la sélection dans la zone');source_missing=True
                             if not t['routes']:errors.append('Ajoutez une association')
+
                             due=due_alarm(t,now,self.alarm_seen)
                             if due is not None:
                                 try:
                                     alarm_file=self.path.with_name('alarms-fired.json');tmp=alarm_file.with_suffix('.tmp');tmp.write_text(json.dumps(self.alarm_seen));os.replace(tmp,alarm_file)
-                                except OSError as e:self.log('Mémorisation du réveil : '+str(e))
+                                except OSError as e:self.log('Mémorisation du réveil : '+str(e),'AUTOMATION')
                                 if window(t['schedule'],now):self.alarms[ip]=(start+due['duration'],copy.deepcopy(due))
-                            end,alarm=self.alarms.get(ip,(0,None))
-                            alarm_on=start<end
+                            alarm_end,alarm=self.alarms.get(ip,(0,None));alarm_on=start<alarm_end
                             on,label=gate(t,self.run_settings,now,self.idle,self.is_locked,self.keep_awake,alarm_on)
-                            frame=render(t,colors,start,self.capture.screen,self.capture.level,self.history,dt)
+                            gate_state=(bool(on),label)
+                            if self.gate_states.get(ip)!=gate_state:
+                                previous=self.gate_states.get(ip);self.gate_states[ip]=gate_state
+                                self.log(t['name']+' : '+label,'PRESENCE','detailed',ip=ip,on=bool(on),idle=round(self.idle,1),locked=self.is_locked,previous=previous)
+
+                            testing=start<self.tests.get(ip,0) and on
+                            color_test=self.color_tests.get(ip)
+                            color_testing=bool(color_test and start<color_test[1] and on)
+                            autonomous=len(t['routes'])==1 and t['routes'][0].get('source')=='wled_preset'
+
+                            # A source that is still booting never sends a black frame.
+                            # The independent WLED worker keeps its previous output.
+                            if source_missing and on and not alarm_on and not testing and not color_testing:
+                                if ip not in self.frames:
+                                    if worker:worker.hold('En attente de la source')
+                                    states[ip]=('; '.join(errors)+' · ' if errors else '')+'En attente de la source…'
+                                    frames[ip]=[]
+                                    continue
+                                frame=copy.deepcopy(self.frames[ip]);label='Source en reconnexion'
+                                autonomous=False
+                            elif autonomous and not alarm_on and not testing:
+                                preset=t['routes'][0].get('wled_preset',1)
+                                if self.demo:
+                                    states[ip]=label+' · Preset WLED '+str(preset);frames[ip]=[]
+                                elif on:
+                                    worker.preset(preset,label,self.run_settings.get('fade_in',0))
+                                    ws=worker.snapshot();states[ip]=label+' · '+ws['state']+' · preset '+str(preset);frames[ip]=[]
+                                else:
+                                    worker.off(label,self.run_settings.get('fade_out',0))
+                                    ws=worker.snapshot();states[ip]=label+' · '+ws['state'];frames[ip]=[]
+                                continue
+                            else:
+                                frame=render(t,colors,start,self.capture.screen,self.capture.level,self.history,dt)
+
                             if alarm_on and on:
-                                frame=effect(alarm['effect'],t['count'],start-(end-alarm['duration']));frame=[tuple(round(c*t['brightness']/100) for c in x) for x in frame];label='Réveil : '+alarm['name']
-                            if start<self.tests.get(ip,0) and on:
+                                frame=effect(alarm['effect'],t['count'],start-(alarm_end-alarm['duration']))
+                                frame=[tuple(round(c*t['brightness']/100) for c in x) for x in frame];label='Réveil : '+alarm['name']
+                            if testing:
                                 frame=[(100,100,100) if int(start*4)%2 else (0,0,0)]*t['count'];label='Identification'
+                            if color_testing:
+                                elapsed=max(0,start-color_test[0])
+                                palette=[((255,0,0),'ROUGE'),((0,255,0),'VERT'),((0,0,255),'BLEU'),((255,255,255),'BLANC')]
+                                color,name=palette[min(3,int(elapsed//2))]
+                                frame=[color]*t['count'];label='Diagnostic RGB : '+name
+
                             fade=self.fades.setdefault(ip,Fade())
-                            # Hard time boundary; presence and manual transitions may fade.
                             if label=='Hors horaires':fade.value=0
                             gain=fade.step(on,dt,self.run_settings['fade_in'],self.run_settings['fade_out'])
                             if on:self.frames[ip]=frame
                             elif gain>0:frame=self.frames.get(ip,frame)
                             frame=[tuple(round(v*gain) for v in c) for c in frame]
-                            if not self.demo:
-                                try:
-                                    for packet in packets(frame):self.udp.sendto(packet,(ip,t['port']))
-                                except OSError as e:health[ip]=str(e);next_probe[ip]=0
-                            states[ip]=('; '.join(errors) if errors and on and not alarm_on else label)
+
+                            if worker:
+                                if on or gain>0:
+                                    worker.stream(frame,self.run_settings.get('fps',25),label)
+                                else:
+                                    worker.off(label,0)
+                                ws=worker.snapshot()
+                                states[ip]=('; '.join(errors) if errors and on and not alarm_on else label)+' · '+ws['state']
+                            else:
+                                states[ip]=('; '.join(errors) if errors and on and not alarm_on else label)
+
                             if ip==self.plan_ip:self.plan_frame=frame
                             frames[ip]=frame[::max(1,len(frame)//200)]
                     self.target_status=states;self.previews=frames

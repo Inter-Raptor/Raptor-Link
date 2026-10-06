@@ -42,3 +42,8 @@ Remove-Item ".\raptor-build\payload" -Recurse -Force
 ```
 
 User configuration is stored outside the installation directory in `%LOCALAPPDATA%\AuroraWLED`.
+
+
+## 0.3.14
+
+Patch de stabilité au démarrage Windows : sondes WLED en lecture seule, UDP non bloqué par l'API HTTP et conservation de la dernière trame pendant le démarrage d'iCUE.
