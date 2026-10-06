@@ -11,6 +11,7 @@ sys.path.insert(0,str((ROOT/'RaptorLink').resolve()))
 from diagnostics import Diagnostics
 from engine import validate
 from wled_worker import WledWorker
+from window import WindowController
 
 def target():
     return {'name':'Logo','ip':'192.168.1.80','count':12,'port':21324}
@@ -144,6 +145,28 @@ class Core2(unittest.TestCase):
                 time.sleep(.1)
                 self.assertEqual(d.recent_lines(30),[])
             finally:d.close()
+
+class WindowLifecycle(unittest.TestCase):
+    def test_window_controller_blocks_duplicate_launch_while_starting(self):
+        launches=[];now=[100.0]
+        w=WindowController(lambda:False,lambda:launches.append(True),clock=lambda:now[0])
+        w.open();w.open()
+        self.assertEqual(len(launches),1)
+        now[0]=131.0
+        w.open()
+        self.assertEqual(len(launches),2)
+
+    def test_window_controller_focuses_existing_window_without_launching(self):
+        launches=[]
+        w=WindowController(lambda:True,lambda:launches.append(True))
+        w.open()
+        self.assertEqual(launches,[])
+
+    def test_window_controller_closes_dashboard_on_app_quit(self):
+        closes=[]
+        w=WindowController(lambda:False,lambda:None,close=lambda:closes.append(True) or True)
+        self.assertTrue(w.close())
+        self.assertEqual(closes,[True])
 
 if __name__=='__main__':
     unittest.main()
