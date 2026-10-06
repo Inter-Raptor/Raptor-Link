@@ -163,6 +163,7 @@ class IcueWorker:
         self.log=logger;self.lock=threading.RLock();self.done=threading.Event();self.process=None
         self.required=set();self.force_scan=True;self.interval=1/25;self.devices=[];self.colors={};self.error=''
         self.busy_since=None;self.operation='';self.last_progress=time.monotonic();self.last_ok=0;self.restarts=0
+        self.color_updates=0;self.color_changes=0;self.last_color_change=0.0
         self.command=command or self._default_command()
         self.thread=threading.Thread(target=self.loop,daemon=True,name='RaptorLink-iCUE-bridge');self.thread.start()
     def _default_command(self):
@@ -183,7 +184,9 @@ class IcueWorker:
                 kill=self.process
             state={'devices':copy.deepcopy(self.devices),'colors':copy.deepcopy(self.colors),'error':self.error,
                    'stalled':stalled,'operation':self.operation if stalled else '',
-                   'age':max(0,now-self.last_progress),'last_ok':self.last_ok,'restarts':self.restarts}
+                   'age':max(0,now-self.last_progress),'last_ok':self.last_ok,'restarts':self.restarts,
+                   'color_updates':self.color_updates,'color_changes':self.color_changes,
+                   'color_change_age':None if not self.last_color_change else max(0,now-self.last_color_change)}
         if kill is not None:
             try:kill.kill()
             except Exception:pass
@@ -216,7 +219,12 @@ class IcueWorker:
         with self.lock:
             if data is not None:
                 self.devices=copy.deepcopy(data.get('devices',[]))
-                self.colors={str(dev):{int(k):tuple(v) for k,v in vals.items()} for dev,vals in data.get('colors',{}).items()}
+                new_colors={str(dev):{int(k):tuple(v) for k,v in vals.items()} for dev,vals in data.get('colors',{}).items()}
+                if data.get('ok'):
+                    self.color_updates+=1
+                    if new_colors and new_colors!=self.colors:
+                        self.color_changes+=1;self.last_color_change=time.monotonic()
+                self.colors=new_colors
                 self.error=str(data.get('error',''));self.last_ok=time.monotonic() if data.get('ok') else self.last_ok
             if error is not None:self.error=str(error)
             self.last_progress=time.monotonic()
@@ -279,7 +287,7 @@ class Engine:
         self.diag=Diagnostics(path.parent/'diagnostics',ds.get('diagnostic_level','normal'),ds.get('diagnostic_days',7),ds.get('diagnostic_max_mb',50))
         self.wled_workers={}
         self.want_run=self.config['settings']['auto_sync']
-        self.tests={};self.fades={};self.history={};self.frames={};self.alarm_seen={};self.alarms={};self.previews={};self.gate_states={}
+        self.tests={};self.color_tests={};self.fades={};self.history={};self.frames={};self.alarm_seen={};self.alarms={};self.previews={};self.gate_states={}
         if config_error:self.log(config_error,'CONFIG')
         try:self.alarm_seen=json.loads(path.with_name('alarms-fired.json').read_text())
         except Exception:pass
@@ -397,6 +405,34 @@ class Engine:
         for t in self.active:
             if not self.demo:self.worker(t).hold('Préparation de la synchronisation')
         self.log('Synchronisation Core 2 démarrée : un worker indépendant par WLED.','ENGINE')
+    def reboot_wled(self,ip,reason="Redémarrage manuel"):
+        with self.lock:t=next((copy.deepcopy(t) for t in self.config['targets'] if t['ip']==ip),None)
+        if not t:raise ValueError('WLED inconnu.')
+        if self.demo:return {'ok':True,'queued':True,'name':t['name']}
+        queued=self.worker(t).reboot(reason)
+        self.log(t['name']+' : redémarrage WLED demandé','WLED-STATE','normal',ip=t['ip'])
+        return {'ok':True,'queued':bool(queued),'name':t['name']}
+
+    def reboot_all_wled(self):
+        with self.lock:targets=copy.deepcopy(self.config['targets'])
+        if self.demo:return {'ok':True,'count':len(targets)}
+        def sequence():
+            for t in targets:
+                if self.done.is_set():break
+                try:self.worker(t).reboot('Redémarrage global demandé')
+                except Exception as e:self.log(t['name']+' : redémarrage impossible ('+str(e)+')','WLED-STATE')
+                self.done.wait(.6)
+        threading.Thread(target=sequence,daemon=True,name='RaptorLink-WLED-reboot-all').start()
+        self.log('Redémarrage de tous les WLED demandé ('+str(len(targets))+')','WLED-STATE')
+        return {'ok':True,'count':len(targets)}
+
+    def color_diagnostic(self,ip):
+        t=next((t for t in self.active if t['ip']==ip),None)
+        if not self.running or not t:raise ValueError('Démarrez la synchronisation avant le diagnostic couleurs.')
+        now=time.monotonic();self.color_tests[ip]=(now,now+8.0)
+        self.log(t['name']+' : diagnostic couleurs rouge/vert/bleu/blanc démarré','WLED-STATE','normal',ip=ip)
+        return {'ok':True,'duration':8}
+
     def identify(self,ip):
         t=next((t for t in self.config['targets'] if t['ip']==ip),None)
         if not t:raise ValueError('Enregistrez cet éclairage avant le test.')
@@ -583,11 +619,13 @@ class Engine:
                                 self.log(t['name']+' : '+label,'PRESENCE','detailed',ip=ip,on=bool(on),idle=round(self.idle,1),locked=self.is_locked,previous=previous)
 
                             testing=start<self.tests.get(ip,0) and on
+                            color_test=self.color_tests.get(ip)
+                            color_testing=bool(color_test and start<color_test[1] and on)
                             autonomous=len(t['routes'])==1 and t['routes'][0].get('source')=='wled_preset'
 
                             # A source that is still booting never sends a black frame.
                             # The independent WLED worker keeps its previous output.
-                            if source_missing and on and not alarm_on and not testing:
+                            if source_missing and on and not alarm_on and not testing and not color_testing:
                                 if ip not in self.frames:
                                     if worker:worker.hold('En attente de la source')
                                     states[ip]=('; '.join(errors)+' · ' if errors else '')+'En attente de la source…'
@@ -614,6 +652,11 @@ class Engine:
                                 frame=[tuple(round(c*t['brightness']/100) for c in x) for x in frame];label='Réveil : '+alarm['name']
                             if testing:
                                 frame=[(100,100,100) if int(start*4)%2 else (0,0,0)]*t['count'];label='Identification'
+                            if color_testing:
+                                elapsed=max(0,start-color_test[0])
+                                palette=[((255,0,0),'ROUGE'),((0,255,0),'VERT'),((0,0,255),'BLEU'),((255,255,255),'BLANC')]
+                                color,name=palette[min(3,int(elapsed//2))]
+                                frame=[color]*t['count'];label='Diagnostic RGB : '+name
 
                             fade=self.fades.setdefault(ip,Fade())
                             if label=='Hors horaires':fade.value=0
