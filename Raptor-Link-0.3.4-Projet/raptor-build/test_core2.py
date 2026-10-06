@@ -10,6 +10,7 @@ sys.path.insert(0,str((ROOT/'RaptorLink').resolve()))
 
 from diagnostics import Diagnostics
 from engine import validate
+from features import effect
 from wled_worker import WledWorker
 from window import WindowController
 
@@ -124,6 +125,52 @@ class Core2(unittest.TestCase):
                 self.assertEqual(snap['state'],'AUTONOMOUS')
             finally:w.close()
 
+    def test_stream_entry_wakes_wled_with_full_global_brightness(self):
+        controls=[];sent=[]
+        with patch.object(WledWorker,'_release_realtime',lambda self:True), \
+             patch.object(WledWorker,'_udp_state',lambda self,payload:controls.append(payload.copy()) or True), \
+             patch.object(WledWorker,'_send_frame',lambda self,frame:sent.append(frame) or True):
+            w=WledWorker(target(),lambda *a,**k:None,None)
+            try:
+                w.stream([(20,30,40)]*12,25,'test')
+                self.assertTrue(wait_for(lambda:bool(sent)))
+                self.assertTrue(any(p.get('on') is True and p.get('bri')==255 for p in controls))
+            finally:w.close()
+
+    def test_resync_after_wled_reboot_restores_realtime_baseline(self):
+        controls=[];releases=[]
+        with patch.object(WledWorker,'_release_realtime',lambda self:releases.append(True) or True), \
+             patch.object(WledWorker,'_udp_state',lambda self,payload:controls.append(payload.copy()) or True):
+            w=WledWorker(target(),lambda *a,**k:None,None)
+            try:
+                with w.lock:w.resync_requested=True
+                w._resync_stream()
+                snap=w.snapshot()
+                self.assertTrue(releases)
+                self.assertTrue(any(p.get('on') is True and p.get('bri')==255 for p in controls))
+                self.assertFalse(snap['resync_requested'])
+                self.assertGreaterEqual(snap['recoveries'],1)
+            finally:w.close()
+
+    def test_manual_wled_reboot_uses_reboot_command(self):
+        http=[];udp=[];releases=[]
+        with patch.object(WledWorker,'_release_realtime',lambda self:releases.append(True) or True), \
+             patch.object(WledWorker,'_http',lambda self,payload,timeout=None:http.append(payload.copy()) or {}), \
+             patch.object(WledWorker,'_udp_state',lambda self,payload:udp.append(payload.copy()) or True):
+            w=WledWorker(target(),lambda *a,**k:None,None)
+            try:
+                self.assertTrue(w.reboot('test'))
+                self.assertTrue(wait_for(lambda:any(p.get('rb') is True for p in http)))
+                self.assertTrue(releases)
+                self.assertEqual(udp,[])
+            finally:w.close()
+
+    def test_rainbow_effect_contains_multiple_primary_dominances(self):
+        frame=effect('rainbow',120,0)
+        self.assertTrue(any(r>200 and g<100 and b<100 for r,g,b in frame))
+        self.assertTrue(any(g>200 and r<100 and b<100 for r,g,b in frame))
+        self.assertTrue(any(b>200 and r<100 and g<100 for r,g,b in frame))
+
     def test_diagnostics_persistent_copyable_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Diagnostics(Path(tmp),'detailed',7,10)
@@ -131,10 +178,10 @@ class Core2(unittest.TestCase):
                 d.event('normal','ENGINE','démarrage')
                 d.event('detailed','PRESENCE','Logo : Inactivité',idle=300)
                 time.sleep(.15)
-                report=d.report(30,{'version':'0.4.1'})
+                report=d.report(30,{'version':'0.4.2'})
                 self.assertIn('RAPTOR LINK',report)
                 self.assertIn('Logo : Inactivité',report)
-                self.assertIn('version: 0.4.1',report)
+                self.assertIn('version: 0.4.2',report)
             finally:d.close()
 
     def test_diagnostics_off_skips_writes(self):
