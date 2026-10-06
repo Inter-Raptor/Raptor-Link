@@ -63,8 +63,12 @@ class App:
         startup(self.engine.config['settings']['startup'])
         self.server=ThreadingHTTPServer(('127.0.0.1',0),self.handler())
         self.url='http://127.0.0.1:'+str(self.server.server_port)+'/#'+self.token
-        from window import WindowController,focus_window
-        self.window=WindowController(lambda:focus_window('Raptor Link · '+str(self.server.server_port)) if sys.platform=='win32' and not DEMO else False,self.launch_window)
+        from window import WindowController,focus_window,close_windows
+        self.window_title='Raptor Link · '+str(self.server.server_port)
+        self.window=WindowController(
+            lambda:focus_window(self.window_title) if sys.platform=='win32' and not DEMO else False,
+            self.launch_window,
+            lambda:close_windows(self.window_title) if sys.platform=='win32' and not DEMO else False)
         INSTANCE.write_text(json.dumps({'port':self.server.server_port,'token':self.token,'pid':os.getpid()}))
         if self.engine.config['settings'].get('check_updates',True) and not DEMO:
             threading.Thread(target=self.check_for_updates,daemon=True,name='RaptorLink-update-check').start()
@@ -245,7 +249,7 @@ class App:
                     self.tray.update_menu();tray_revision=self.engine.revision
         except KeyboardInterrupt:pass
         finally:
-            self.engagement.close();self.engine.shutdown();self.server.shutdown()
+            self.engagement.close();self.window.close();self.engine.shutdown();self.server.shutdown()
             if self.tray:self.tray.stop()
             INSTANCE.unlink(missing_ok=True)
 
