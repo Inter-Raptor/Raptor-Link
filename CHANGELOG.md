@@ -4,6 +4,19 @@ All notable changes to Raptor Link can be documented here.
 
 The format is based on a simple version history intended for GitHub Releases.
 
+## 0.4.2 Core 2 Stability Beta
+
+- Automatically detects WLED controller reboots by monitoring the controller uptime in a separate health thread that never blocks realtime UDP streaming.
+- If a controller reboots or loses WLED realtime mode while Raptor Link is streaming, its worker explicitly releases stale realtime state, restores ON/brightness and resumes RGB output automatically.
+- Entering realtime mode now prepares WLED even when Raptor Link did not previously switch it off, fixing controllers that return after a power cut with brightness/state inconsistent with the running stream.
+- Health checks are deliberately lightweight and independent. One HTTP timeout is tolerated so controllers with a fragile web API can continue receiving UDP normally.
+- Diagnostics now expose WLED reachability, uptime, realtime live/mode/source fields, automatic recoveries, reboot state, RGB frame-change count and representative RGB samples.
+- iCUE diagnostics now count successful color reads and actual color changes, making it possible to distinguish a frozen source from a WLED output problem.
+- Added a per-device **Restart this WLED** command and a **Restart all WLEDs** command in the Windows tray menu, plus individual WLED restart entries.
+- Added an 8-second per-device RGB diagnostic sequence: red, green, blue, then white.
+- Fixed the single-window lifecycle: launching Raptor Link again focuses the existing dashboard instead of creating another one, and **Quit** from the tray closes the dashboard window as well as the engine.
+- Added regression coverage for window lifecycle, WLED reboot/recovery and RGB generation.
+
 ## 0.4.1 Core 2 Beta
 
 - Fixed the first real-hardware issue found with autonomous WLED presets: some controllers could remain stuck in realtime UDP mode and stop answering the web/HTTP API.
